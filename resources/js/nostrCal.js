@@ -57,6 +57,20 @@ export default (livewireComponent) => ({
         });
     },
 
+    deleteDays() {
+        let start = new Date(this.newEventStart);
+        let end = new Date(this.newEventEnd);
+        end = new Date(end);
+        end.setDate(end.getDate() - 1);
+        let days = [];
+        for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+            days.push(new Date(d).toISOString().slice(0, 10));
+        }
+        livewireComponent.call('deleteDays', days);
+
+        this.modalOpen = false;
+    },
+
     setCountry(country) {
         console.log(country);
         // convert newEventStart to Date object

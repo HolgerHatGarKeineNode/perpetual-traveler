@@ -12,6 +12,23 @@ $countries = computed(function () {
     return countries();
 });
 
+$deleteDays = function ($days) {
+    // delete each day in the database
+    Event::query()
+        ->where('user_id', auth()->id())
+        ->whereIn('day', $days)
+        ->delete();
+
+    $this->events = Event::query()
+        ->where('user_id', auth()->id())
+        ->get()
+        ->map(fn($event) => [
+            'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
+            'start' => $event->day,
+        ])
+        ->toArray();
+};
+
 $saveDays = function ($days, $country) {
     // save each day in the database
     foreach ($days as $day) {
@@ -131,15 +148,19 @@ mount(function () {
                             </button>
                         </div>
                         <div class="relative w-auto">
-                            <p>From: <span x-text="newEventStart"></span></p>
-                            <p>Until: <span x-text="newEventEnd"></span></p>
+                            <div class="py-6">
+                                <button type="button" @click="deleteDays"
+                                        class="rounded bg-indigo-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                                    Delete selected days
+                                </button>
+                            </div>
 
                             <div class="flex flex-wrap">
                                 @foreach(collect($this->countries)->sortBy('name') as $country)
                                     <div
-                                        class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
-                                        @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                        wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
+                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
+                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
                                         {{ $country['emoji'] }} {{ $country['name'] }}
                                     </div>
                                 @endforeach
