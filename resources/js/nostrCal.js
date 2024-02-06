@@ -13,6 +13,8 @@ export default (livewireComponent) => ({
 
     events: livewireComponent.entangle('events'),
 
+    currentYear: livewireComponent.entangle('currentYear').live,
+
     async init() {
 
         // map this.events into this format: {title: 'event', start: '2021-01-01'}
@@ -23,6 +25,8 @@ export default (livewireComponent) => ({
                 allDay: true
             }
         });
+
+        const that = this;
 
         this.calendar = new Calendar(this.$refs.cal, {
             plugins: [interactionPlugin, multiMonthPlugin],
@@ -40,6 +44,16 @@ export default (livewireComponent) => ({
                 this.newEventEnd = info.endStr;
                 console.log(info);
                 this.modalOpen = true;
+            },
+            datesSet: function(dateInfo) {
+                const startYear = dateInfo.start.getFullYear();
+                const endYear = dateInfo.end.getFullYear();
+
+                if(startYear !== endYear){
+                    console.log('Das Jahr hat gewechselt');
+                    console.log(startYear);
+                    that.currentYear = startYear;
+                }
             },
         });
 

@@ -1,25 +1,31 @@
 <?php
 
 use function Laravel\Folio\{middleware};
-use function Livewire\Volt\{computed, state, mount};
+use function Livewire\Volt\{computed, state, mount, updated, rules};
 use App\Models\Event;
 
 middleware(['auth']);
 
-state(['events']);
+state(['events', 'currentYear']);
 
 $countries = computed(function () {
     return countries();
 });
 
 $deleteDays = function ($days) {
+    $currentYear = $this->currentYear ?? now()->year;
+
     // delete each day in the database
     Event::query()
+        ->where('day', '>=', $currentYear . '-01-01')
+        ->where('day', '<=', $currentYear . '-12-31')
         ->where('user_id', auth()->id())
         ->whereIn('day', $days)
         ->delete();
 
     $this->events = Event::query()
+        ->where('day', '>=', $currentYear . '-01-01')
+        ->where('day', '<=', $currentYear . '-12-31')
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
@@ -30,6 +36,8 @@ $deleteDays = function ($days) {
 };
 
 $saveDays = function ($days, $country) {
+    $currentYear = $this->currentYear ?? now()->year;
+
     // save each day in the database
     foreach ($days as $day) {
         $event = Event::firstOrNew([
@@ -43,6 +51,8 @@ $saveDays = function ($days, $country) {
     }
 
     $this->events = Event::query()
+        ->where('day', '>=', $currentYear . '-01-01')
+        ->where('day', '<=', $currentYear . '-12-31')
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
@@ -53,7 +63,11 @@ $saveDays = function ($days, $country) {
 };
 
 mount(function () {
+    $currentYear = $this->currentYear ?? now()->year;
+
     $this->events = Event::query()
+        ->where('day', '>=', $currentYear . '-01-01')
+        ->where('day', '<=', $currentYear . '-12-31')
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
@@ -62,6 +76,21 @@ mount(function () {
         ])
         ->toArray();
 });
+
+updated(['currentYear' => function () {
+    $currentYear = $this->currentYear ?? now()->year;
+
+    $this->events = Event::query()
+        ->where('day', '>=', $currentYear . '-01-01')
+        ->where('day', '<=', $currentYear . '-12-31')
+        ->where('user_id', auth()->id())
+        ->get()
+        ->map(fn($event) => [
+            'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
+            'start' => $event->day,
+        ])
+        ->toArray();
+}]);
 
 ?>
 
