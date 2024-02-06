@@ -8,23 +8,27 @@ use function Livewire\Volt\layout;
 layout('layouts.guest');
 
 $login = function ($pubKey) {
-    $user = \App\Models\User::query()
-        ->where('npub', $pubKey)
-        ->firstOrCreate([
-            'npub' => $pubKey,
-        ], [
-            'npub' => $pubKey,
-            'name' => str($pubKey)->limit(20, ''),
-            'password' => bcrypt(str()->random(20)),
-            'email' => str($pubKey)->limit(20, '') . '@nostr.com',
-            'email_verified_at' => now(),
-        ]);
-    auth()->login($user);
-    Session::regenerate();
-    $this->redirect(
-        session('url.intended', RouteServiceProvider::HOME),
-        navigate: true
-    );
+    if ($pubKey) {
+        $user = \App\Models\User::query()
+            ->where('npub', $pubKey)
+            ->firstOrCreate([
+                'npub' => $pubKey,
+            ], [
+                'npub' => $pubKey,
+                'name' => str($pubKey)->limit(20, ''),
+                'password' => bcrypt(str()->random(20)),
+                'email' => str($pubKey)->limit(20, '') . '@nostr.com',
+                'email_verified_at' => now(),
+            ]);
+        auth()->login($user);
+        Session::regenerate();
+        $this->redirect(
+            session('url.intended', RouteServiceProvider::HOME),
+            navigate: true
+        );
+    }
+
+    return redirect()->route('login');
 };
 
 ?>
@@ -33,8 +37,7 @@ $login = function ($pubKey) {
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')"/>
 
-    <div
-            class="flex flex-col space-y-4 items-center justify-end mt-4">
+    <div class="flex flex-col space-y-4 items-center justify-end mt-4">
 
         <div class="py-4">
             <h1 x-data="{
@@ -78,7 +81,6 @@ $login = function ($pubKey) {
                 Perpetual Traveler - Calendar
             </h1>
         </div>
-
 
         <x-primary-button class="ms-3" @click="initNDK">
             {{ __('NIP-07 login') }}

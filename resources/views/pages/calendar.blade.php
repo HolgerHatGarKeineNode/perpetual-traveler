@@ -56,10 +56,41 @@ mount(function () {
     </x-slot>
 
     @volt
-    <div x-data="nostrCal(@this)" wire:ignore>
+    <div x-data="nostrCal(@this)">
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
             <div class="p-6 text-gray-900 dark:text-gray-100">
-                <div x-ref="cal"></div>
+                <div class="flex space-x-2">
+                    <div wire:ignore class="w-10/12" x-ref="cal"></div>
+                    <div class="w-2/12">
+                        <div class="lg:flex lg:flex-auto lg:justify-center">
+                            <dl class="space-y-2 w-80">
+                                @php
+                                    $events = collect($this->events)->groupBy('title')->sort(function ($a, $b) {
+                                        return count($b) - count($a);
+                                    });
+                                @endphp
+                                @foreach($events as $c => $event)
+                                    <div class="flex flex-col-reverse gap-y-1">
+                                        @if($event->count() > 100)
+                                            <dt class="text-base text-red-600">{{ $event->count() }} days</dt>
+                                        @elseif($event->count() > 50)
+                                            <dt class="text-base text-yellow-600">{{ $event->count() }} days</dt>
+                                        @else
+                                            <dt class="text-base text-gray-600">{{ $event->count() }} days</dt>
+                                        @endif
+                                        @if($event->count() > 100)
+                                            <dd class="text-md font-semibold tracking-tight text-red-600">{{ $c }}</dd>
+                                        @elseif($event->count() > 50)
+                                            <dd class="text-md font-semibold tracking-tight text-yellow-600">{{ $c }}</dd>
+                                        @else
+                                            <dd class="text-md font-semibold tracking-tight text-gray-600">{{ $c }}</dd>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </dl>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -106,9 +137,9 @@ mount(function () {
                             <div class="flex flex-wrap">
                                 @foreach(collect($this->countries)->sortBy('name') as $country)
                                     <div
-                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
-                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
+                                        class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                        @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
+                                        wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
                                         {{ $country['emoji'] }} {{ $country['name'] }}
                                     </div>
                                 @endforeach
