@@ -112,7 +112,7 @@ $login = function ($pubKey) {
         <form wire:submit="submitLogin">
 
             <div>
-                <x-input-label for="name" :value="__('Name')"/>
+                <x-input-label for="name" :value="__('Username')"/>
                 <x-text-input wire:model="form.name" id="name" class="block mt-1 w-full" type="text" name="name"
                               required autofocus autocomplete="username"/>
                 <x-input-error :messages="$errors->get('name')" class="mt-2"/>
