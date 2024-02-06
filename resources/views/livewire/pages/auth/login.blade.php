@@ -3,9 +3,24 @@
 use App\Providers\RouteServiceProvider;
 use Illuminate\Support\Facades\Session;
 
+use App\Livewire\Forms\LoginForm;
+
 use function Livewire\Volt\layout;
+use function Livewire\Volt\form;
 
 layout('layouts.guest');
+
+form(LoginForm::class);
+
+$submitLogin = function () {
+    $this->validate();
+    $this->form->authenticate();
+    Session::regenerate();
+    $this->redirect(
+        session('url.intended', RouteServiceProvider::HOME),
+        navigate: true
+    );
+};
 
 $login = function ($pubKey) {
     if ($pubKey) {
@@ -39,7 +54,7 @@ $login = function ($pubKey) {
 
     <div class="flex flex-col space-y-4 items-center justify-end mt-4">
 
-        <div class="py-4">
+        <div class="py-8">
             <h1 x-data="{
                 startingAnimation: { opacity: 0, scale: 4 },
                 endingAnimation: { opacity: 1, scale: 1, stagger: 0.07, duration: 1, ease: 'expo.out' },
@@ -83,11 +98,47 @@ $login = function ($pubKey) {
         </div>
 
         <x-primary-button class="ms-3" @click="initNDK">
-            {{ __('NIP-07 login') }}
+            {{ __('Nostr NIP-07 login') }}
         </x-primary-button>
 
         <a target="_blank" href="https://nostr.com" class="text-sm text-purple-500 hover:text-purple-500">
             {{ __('What is NIP-07 and how do I get a Nostr key?') }}
         </a>
+
+        <div class="text-center text-xl text-gray-900 my-6">
+            Login Name und Password
+        </div>
+
+        <form wire:submit="submitLogin">
+
+            <div>
+                <x-input-label for="name" :value="__('Name')"/>
+                <x-text-input wire:model="form.name" id="name" class="block mt-1 w-full" type="text" name="name"
+                              required autofocus autocomplete="username"/>
+                <x-input-error :messages="$errors->get('name')" class="mt-2"/>
+            </div>
+
+            <div class="mt-4">
+                <x-input-label for="password" :value="__('Password')"/>
+
+                <x-text-input wire:model="form.password" id="password" class="block mt-1 w-full"
+                              type="password"
+                              name="password"
+                              required autocomplete="current-password"/>
+
+                <x-input-error :messages="$errors->get('password')" class="mt-2"/>
+            </div>
+
+            <div class="flex items-center justify-end mt-4">
+                <x-primary-button class="ms-3">
+                    {{ __('Log in') }}
+                </x-primary-button>
+            </div>
+
+            <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
+               href="{{ route('register') }}" wire:navigate>
+                {{ __('Register') }}
+            </a>
+        </form>
     </div>
 </div>
