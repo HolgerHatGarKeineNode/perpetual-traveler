@@ -222,7 +222,7 @@ updated([
                                                     <li class="relative flex gap-x-1">
                                                         <div class="border-l align-middle"></div>
                                                         @php
-                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis']));
+                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis'])) - 1;
                                                         @endphp
                                                         <div
                                                             class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif ">
