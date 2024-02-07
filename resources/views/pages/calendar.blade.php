@@ -136,8 +136,8 @@ updated([
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
             <div class="p-6 text-gray-900 dark:text-gray-100">
                 <div class="flex space-x-2">
-                    <div wire:ignore class="w-10/12" x-ref="cal"></div>
-                    <div class="w-2/12">
+                    <div wire:ignore class="w-9/12 xl:w-10/12" x-ref="cal"></div>
+                    <div class="w-3/12 xl:w-2/12">
                         <div class="lg:flex lg:flex-auto lg:justify-center">
                             <dl class="space-y-2 w-80">
                                 @php
@@ -205,13 +205,34 @@ updated([
                                         <dt class="text-base text-gray-600 border-t">
                                             Contiguous stays
                                         </dt>
-                                        @foreach($contiguousStays[$c] as $stay)
-                                            <dt class="text-xs text-gray-600">
-                                                <span class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
-                                                from {{ \Illuminate\Support\Carbon::parse($stay['von'])->format('d.m.Y') }}
-                                                to {{ \Illuminate\Support\Carbon::parse($stay['bis'])->format('d.m.Y') }}
-                                            </dt>
-                                        @endforeach
+                                        <ul role="list">
+                                            @foreach($contiguousStays[$c] as $key => $stay)
+                                                <li class="relative flex flex-col gap-x-1">
+                                                    <div class="text-xs leading-5 text-gray-500">
+                                                        <span
+                                                            class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
+                                                    </div>
+                                                    <time datetime="2023-01-23T10:32"
+                                                          class="text-xs leading-5 text-gray-500">
+                                                        from {{ \Illuminate\Support\Carbon::parse($stay['von'])->format('d.m.Y') }}
+                                                        to {{ \Illuminate\Support\Carbon::parse($stay['bis'])->format('d.m.Y') }}
+                                                    </time>
+                                                </li>
+                                                @if(!$loop->last)
+                                                    <li class="relative flex gap-x-1">
+                                                        <div class="border-l align-middle"></div>
+                                                        @php
+                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis']));
+                                                        @endphp
+                                                        <div
+                                                            class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif ">
+                                                            {{ $daysInBetween }}
+                                                            days in between
+                                                        </div>
+                                                    </li>
+                                                @endif
+                                            @endforeach
+                                        </ul>
                                     </div>
                                 @endforeach
                             </dl>
