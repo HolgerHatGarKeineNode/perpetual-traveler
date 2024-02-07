@@ -128,9 +128,9 @@ updated([
                     </label>
                 </div>
                 <input
-                        id="start"
-                        type="date"
-                        wire:model.live.debounce="start"/>
+                    id="start"
+                    type="date"
+                    wire:model.live.debounce="start"/>
             </div>
         </div>
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
@@ -194,9 +194,11 @@ updated([
                                         <dt class="text-base font-bold text-gray-600">
                                             {{ $event['total_days_as_pt'] }} days - As PT
                                         </dt>
-                                        <dt class="text-xs text-gray-600">
-                                            {{ $event['total_days_without_pt'] }} days - Without PT
-                                        </dt>
+                                        @if($event['total_days_without_pt'] > 0)
+                                            <dt class="text-xs text-gray-600">
+                                                {{ $event['total_days_without_pt'] }} days - Without PT
+                                            </dt>
+                                        @endif
                                         <dt class="text-xs text-gray-600">
                                             {{ $event['total_days'] }} days - Total
                                         </dt>
@@ -262,9 +264,9 @@ updated([
                             <div class="flex flex-wrap">
                                 @foreach(collect($this->countries)->sortBy('name') as $country)
                                     <div
-                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
-                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
+                                        class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                        @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
+                                        wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
                                         {{ $country['emoji'] }} {{ $country['name'] }}
                                     </div>
                                 @endforeach
