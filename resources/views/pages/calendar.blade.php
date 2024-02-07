@@ -80,7 +80,7 @@ mount(function () {
         ])
         ->toArray();
 
-    $this->start = auth()->user()->pt_start->format('Y-m-d');
+    $this->start = auth()->user()->pt_start?->format('Y-m-d');
 });
 
 updated([
