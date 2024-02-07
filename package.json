@@ -6,6 +6,7 @@
         "build": "vite build"
     },
     "devDependencies": {
+        "@defstudio/vite-livewire-plugin": "^1.3.2",
         "@fullcalendar/core": "^6.1.10",
         "@fullcalendar/interaction": "^6.1.10",
         "@fullcalendar/multimonth": "^6.1.10",

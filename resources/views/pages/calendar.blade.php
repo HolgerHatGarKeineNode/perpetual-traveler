@@ -6,7 +6,11 @@ use App\Models\Event;
 
 middleware(['auth']);
 
-state(['events', 'currentYear']);
+state(['events', 'currentYear', 'start']);
+
+rules([
+    'start' => 'required|date',
+]);
 
 $countries = computed(function () {
     return countries();
@@ -75,34 +79,60 @@ mount(function () {
             'start' => $event->day,
         ])
         ->toArray();
+
+    $this->start = auth()->user()->pt_start->format('Y-m-d');
 });
 
-updated(['currentYear' => function () {
-    $currentYear = $this->currentYear ?? now()->year;
+updated([
+    'currentYear' => function () {
+        $currentYear = $this->currentYear ?? now()->year;
 
-    $this->events = Event::query()
-        ->where('day', '>=', $currentYear . '-01-01')
-        ->where('day', '<=', $currentYear . '-12-31')
-        ->where('user_id', auth()->id())
-        ->get()
-        ->map(fn($event) => [
-            'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
-            'start' => $event->day,
-        ])
-        ->toArray();
-}]);
+        $this->events = Event::query()
+            ->where('day', '>=', $currentYear . '-01-01')
+            ->where('day', '<=', $currentYear . '-12-31')
+            ->where('user_id', auth()->id())
+            ->get()
+            ->map(fn($event) => [
+                'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
+                'start' => $event->day,
+            ])
+            ->toArray();
+    },
+    'start' => function () {
+        $user = auth()->user();
+        $user->pt_start = \Illuminate\Support\Carbon::parse($this->start)->startOfDay();
+        $user->save();
+    },
+]);
 
 ?>
 
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Calendar') }}
-        </h2>
+        <div class="flex justify-between">
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                    {{ __('Calendar') }}
+                </h2>
+            </div>
+        </div>
     </x-slot>
-
     @volt
     <div x-data="nostrCal(@this)">
+        <div class="flex items-center py-4 px-4 sm:px-12">
+            <div>
+                <div class="flex justify-between items-end mb-1">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400"
+                           for="start">
+                        Choose your start date as a perpetual traveler
+                    </label>
+                </div>
+                <input
+                        id="start"
+                        type="date"
+                        wire:model.live.debounce="start"/>
+            </div>
+        </div>
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
             <div class="p-6 text-gray-900 dark:text-gray-100">
                 <div class="flex space-x-2">
@@ -111,26 +141,75 @@ updated(['currentYear' => function () {
                         <div class="lg:flex lg:flex-auto lg:justify-center">
                             <dl class="space-y-2 w-80">
                                 @php
-                                    $events = collect($this->events)->groupBy('title')->sort(function ($a, $b) {
-                                        return count($b) - count($a);
-                                    });
+                                    $contiguousStays = [];
+                                    $currentTitle = null;
+                                    $anzahlTage = 0;
+                                    $von = null;
+                                    $bis = null;
+                                    foreach ($events as $i => $item) {
+                                        if ($currentTitle !== $item['title'] || strtotime($item['start']) - strtotime($events[$i-1]['start']) > 86400) {
+                                            if($currentTitle){
+                                                $contiguousStays[$currentTitle][] = ['anzahlTage' => $anzahlTage, 'von' => $von, 'bis' => $bis];
+                                            }
+                                            $currentTitle = $item['title'];
+                                            $anzahlTage = 1;
+                                            $von = $item['start'];
+                                        } else {
+                                            $anzahlTage++;
+                                        }
+                                        $bis = $item['start'];
+                                    }
+                                    if($currentTitle){
+                                        $contiguousStays[$currentTitle][] = ['anzahlTage' => $anzahlTage, 'von' => $von, 'bis' => $bis];
+                                    }
+                                    $events = collect($this->events)
+                                        ->groupBy('title')
+                                        ->map(function($event) use($start) {
+                                            $totalDaysWithoutPt = 0;
+                                            $totalDaysAsPt = 0;
+                                            if (!$start) {
+                                                $totalDaysWithoutPt = count($event);
+                                            }
+                                            if ($start) {
+                                                $totalDaysWithoutPt = $event
+                                                    ->filter(fn($e) => $e['start'] < $start)
+                                                    ->count();
+                                                $totalDaysAsPt = $event
+                                                    ->filter(fn($e) => $e['start'] >= $start)
+                                                    ->count();
+                                            }
+                                            return [
+                                                'total_days' => count($event),
+                                                'total_days_without_pt' => $totalDaysWithoutPt,
+                                                'total_days_as_pt' => $totalDaysAsPt,
+                                            ];
+                                        })
+                                        ->sort(function ($a, $b) {
+                                            return count($b) - count($a);
+                                        });
                                 @endphp
                                 @foreach($events as $c => $event)
-                                    <div class="flex flex-col-reverse gap-y-1">
-                                        @if($event->count() > 100)
-                                            <dt class="text-base text-red-600">{{ $event->count() }} days</dt>
-                                        @elseif($event->count() > 50)
-                                            <dt class="text-base text-yellow-600">{{ $event->count() }} days</dt>
-                                        @else
-                                            <dt class="text-base text-gray-600">{{ $event->count() }} days</dt>
-                                        @endif
-                                        @if($event->count() > 100)
-                                            <dd class="text-md font-semibold tracking-tight text-red-600">{{ $c }}</dd>
-                                        @elseif($event->count() > 50)
-                                            <dd class="text-md font-semibold tracking-tight text-yellow-600">{{ $c }}</dd>
-                                        @else
-                                            <dd class="text-md font-semibold tracking-tight text-gray-600">{{ $c }}</dd>
-                                        @endif
+                                    <div class="flex flex-col gap-y-1 border p-2 rounded">
+                                        <dd class="text-md font-semibold tracking-tight text-gray-600">{{ $c }}</dd>
+                                        <dt class="text-base font-bold text-gray-600">
+                                            {{ $event['total_days_as_pt'] }} days - As PT
+                                        </dt>
+                                        <dt class="text-xs text-gray-600">
+                                            {{ $event['total_days_without_pt'] }} days - Without PT
+                                        </dt>
+                                        <dt class="text-xs text-gray-600">
+                                            {{ $event['total_days'] }} days - Total
+                                        </dt>
+                                        <dt class="text-base text-gray-600 border-t">
+                                            Contiguous stays
+                                        </dt>
+                                        @foreach($contiguousStays[$c] as $stay)
+                                            <dt class="text-xs text-gray-600">
+                                                <span class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
+                                                from {{ \Illuminate\Support\Carbon::parse($stay['von'])->format('d.m.Y') }}
+                                                to {{ \Illuminate\Support\Carbon::parse($stay['bis'])->format('d.m.Y') }}
+                                            </dt>
+                                        @endforeach
                                     </div>
                                 @endforeach
                             </dl>
