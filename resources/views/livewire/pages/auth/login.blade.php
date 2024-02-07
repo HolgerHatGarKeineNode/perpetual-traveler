@@ -91,7 +91,7 @@ $login = function ($pubKey) {
                     }
                 }, 5);
             "
-                class="invisible block text-3xl font-bold custom-font"
+                class="invisible block text-xl font-bold custom-font"
             >
                 Perpetual Traveler - Calendar
             </h1>
@@ -106,7 +106,7 @@ $login = function ($pubKey) {
         </a>
 
         <div class="text-center text-xl text-gray-900 my-6">
-            Login Name und Password
+            Login with username and password
         </div>
 
         <form wire:submit="submitLogin">
