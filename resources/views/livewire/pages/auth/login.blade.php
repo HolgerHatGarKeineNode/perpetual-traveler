@@ -7,6 +7,7 @@ use App\Livewire\Forms\LoginForm;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\form;
+use function Livewire\Volt\mount;
 
 layout('layouts.guest');
 
@@ -45,6 +46,13 @@ $login = function ($pubKey) {
 
     return redirect()->route('login');
 };
+
+mount(function () {
+    if (str_contains($_SERVER['HTTP_USER_AGENT'], 'Tor')) {
+        header('Location: http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login');
+        exit;
+    }
+});
 
 ?>
 
@@ -140,5 +148,12 @@ $login = function ($pubKey) {
                 {{ __('Register') }}
             </a>
         </form>
+
+        <div
+            class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out">
+            <a class="underline text-purple-500"
+               href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login">Onion/Tor</a>
+        </div>
+
     </div>
 </div>

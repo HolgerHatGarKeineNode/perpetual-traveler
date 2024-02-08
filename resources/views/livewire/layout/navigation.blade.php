@@ -22,11 +22,14 @@ $logout = function (Logout $logout) {
                 </div>
 
                 <!-- Navigation Links -->
-                {{--<div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </x-nav-link>
-                </div>--}}
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <div class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out">
+                        Source-Code: <a target="_blank" href="https://github.com/HolgerHatGarKeineNode/perpetual-traveler">https://github.com/HolgerHatGarKeineNode/perpetual-traveler</a>
+                    </div>
+                    <div class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out">
+                        Tor: <a href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/">http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/</a>
+                    </div>
+                </div>
             </div>
 
             <!-- Settings Dropdown -->
