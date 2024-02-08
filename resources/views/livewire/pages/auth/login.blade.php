@@ -45,14 +45,6 @@ $login = function ($pubKey) {
     }
 
     return redirect()->route('login');
-};
-
-mount(function () {
-    if (str_contains($_SERVER['HTTP_USER_AGENT'], 'Tor')) {
-        header('Location: http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login');
-        exit;
-    }
-});
 
 ?>
 
