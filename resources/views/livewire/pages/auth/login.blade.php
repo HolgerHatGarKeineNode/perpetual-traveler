@@ -45,6 +45,7 @@ $login = function ($pubKey) {
     }
 
     return redirect()->route('login');
+};
 
 ?>
 
