@@ -74,7 +74,7 @@ export const ndkInstance = (Alpine) => ({
             //     console.log('##### nip07 signer error #####', error);
             // });
 
-            return instance;
+            return signer;
         } catch (e) {
             console.log(e);
         }

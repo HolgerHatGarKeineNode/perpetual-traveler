@@ -3,11 +3,13 @@ import {ndkInstance} from "./ndk/instance.js";
 export default (livewireComponent) => ({
 
     async initNDK() {
-        const instance = await ndkInstance(this).init();
+        const signer = await ndkInstance(this).init();
 
-        console.log('##### instance #####', instance);
+        signer.user().then(async (user) => {
+            console.log('##### user #####', user);
+            await livewireComponent.call('loginNostr', user.npub);
+        });
 
-        await livewireComponent.call('login', instance._activeUser._npub);
     },
 
 

@@ -23,7 +23,7 @@ $submitLogin = function () {
     );
 };
 
-$login = function ($pubKey) {
+$loginNostr = function ($pubKey) {
     if ($pubKey) {
         $user = \App\Models\User::query()
             ->where('npub', $pubKey)
@@ -42,9 +42,9 @@ $login = function ($pubKey) {
             session('url.intended', RouteServiceProvider::HOME),
             navigate: true
         );
-    }
 
-    return redirect()->route('login');
+        return redirect()->route('login');
+    }
 };
 
 ?>
