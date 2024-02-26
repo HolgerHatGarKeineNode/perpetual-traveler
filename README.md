@@ -2,7 +2,7 @@
 
 ### LIVE
 
-Clearnet: https://pt.codingarena.de
+Clearnet: https://pt.codingarena.top
 
 Tor: http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion
 
