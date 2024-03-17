@@ -6,14 +6,14 @@ use App\Models\Event;
 
 middleware(['auth']);
 
-state(['events', 'currentYear', 'start']);
+state(['events', 'currentYear', 'start', 'search', 'selectedCountries']);
 
 rules([
     'start' => 'required|date',
 ]);
 
 $countries = computed(function () {
-    return countries();
+    return collect(countries())->sortBy('name');
 });
 
 $deleteDays = function ($days) {
@@ -66,6 +66,12 @@ $saveDays = function ($days, $country) {
         ->toArray();
 };
 
+$setCountry = function ($country) {
+    dd($country);
+
+    $this->modalOpen = false;
+};
+
 mount(function () {
     $currentYear = $this->currentYear ?? now()->year;
 
@@ -75,12 +81,15 @@ mount(function () {
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
+            'country' => country($event->country)->getIsoAlpha2(),
             'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
             'start' => $event->day,
         ])
         ->toArray();
 
     $this->start = auth()->user()->pt_start?->format('Y-m-d');
+
+    $this->selectedCountries = collect($this->events)->pluck('country')->unique()->toArray();
 });
 
 updated([
@@ -102,6 +111,15 @@ updated([
         $user = auth()->user();
         $user->pt_start = \Illuminate\Support\Carbon::parse($this->start)->startOfDay();
         $user->save();
+    },
+    'search' => function () {
+        if ($this->search) {
+            $this->countries = collect(countries())
+                ->filter(fn($country) => str($country['name'])->lower()->contains(str($this->search)->lower()))
+                ->sortBy('name');
+        } else {
+            $this->countries = collect(countries())->sortBy('name');
+        }
     },
 ]);
 
@@ -128,9 +146,9 @@ updated([
                     </label>
                 </div>
                 <input
-                    id="start"
-                    type="date"
-                    wire:model.live.debounce="start"/>
+                        id="start"
+                        type="date"
+                        wire:model.live.debounce="start"/>
             </div>
         </div>
         <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
@@ -141,6 +159,11 @@ updated([
                         <div class="lg:flex lg:flex-auto lg:justify-center">
                             <dl class="space-y-2 w-80">
                                 @php
+                                    // Sorting the events by date
+                                    usort($events, function($a, $b) {
+                                    return strtotime($a['start']) - strtotime($b['start']);
+                                    });
+                                    // Merging events of the same country and segregating into contiguous stays
                                     $contiguousStays = [];
                                     $currentTitle = null;
                                     $anzahlTage = 0;
@@ -162,7 +185,7 @@ updated([
                                     if($currentTitle){
                                         $contiguousStays[$currentTitle][] = ['anzahlTage' => $anzahlTage, 'von' => $von, 'bis' => $bis];
                                     }
-                                    $events = collect($this->events)
+                                    $events = collect($events)
                                         ->groupBy('title')
                                         ->map(function($event) use($start) {
                                             $totalDaysWithoutPt = 0;
@@ -183,10 +206,7 @@ updated([
                                                 'total_days_without_pt' => $totalDaysWithoutPt,
                                                 'total_days_as_pt' => $totalDaysAsPt,
                                             ];
-                                        })
-                                        ->sort(function ($a, $b) {
-                                            return count($b) - count($a);
-                                        });
+                                    });
                                 @endphp
                                 @foreach($events as $c => $event)
                                     <div class="flex flex-col gap-y-1 border p-2 rounded">
@@ -210,7 +230,7 @@ updated([
                                                 <li class="relative flex flex-col gap-x-1">
                                                     <div class="text-xs leading-5 text-gray-500">
                                                         <span
-                                                            class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
+                                                                class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
                                                     </div>
                                                     <time datetime="2023-01-23T10:32"
                                                           class="text-xs leading-5 text-gray-500">
@@ -225,7 +245,7 @@ updated([
                                                             $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis'])) - 1;
                                                         @endphp
                                                         <div
-                                                            class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif ">
+                                                                class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif ">
                                                             {{ $daysInBetween }}
                                                             days in between
                                                         </div>
@@ -275,19 +295,36 @@ updated([
                             </button>
                         </div>
                         <div class="relative w-auto">
-                            <div class="py-6">
+                            <div class="py-6 flex flex-row justify-between">
+                                <div class="flex items-center px-3 border-b">
+                                    <input
+                                            wire:model.live.debounce="search"
+                                            type="text"
+                                            class="flex w-full px-2 py-3 text-sm bg-transparent border-0 rounded-md outline-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-neutral-400 h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                                            placeholder="Search..." autocomplete="off" autocorrect="off"
+                                            spellcheck="false">
+                                </div>
                                 <button type="button" @click="deleteDays"
-                                        class="rounded bg-indigo-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                                        class="rounded bg-red-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
                                     Delete selected days
                                 </button>
                             </div>
-
-                            <div class="flex flex-wrap">
-                                @foreach(collect($this->countries)->sortBy('name') as $country)
+                            <div class="flex flex-wrap py-6 border-t border-b">
+                                @foreach($this->selectedCountries as $country)
                                     <div
-                                        class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
-                                        @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                        wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
+                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                            @click="setCountry('{{ $country }}')"
+                                            wire:key="c_{{ $country }}">
+                                        {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
+                                    </div>
+                                @endforeach
+                            </div>
+                            <div class="flex flex-wrap">
+                                @foreach($this->countries as $country)
+                                    <div
+                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
+                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
                                         {{ $country['emoji'] }} {{ $country['name'] }}
                                     </div>
                                 @endforeach
