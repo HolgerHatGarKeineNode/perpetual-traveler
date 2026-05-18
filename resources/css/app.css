@@ -11,3 +11,38 @@
         'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+/* FullCalendar: zeige nur die Länder-Flagge als kompakte Anzeige */
+.fc-event,
+.fc-daygrid-event,
+.fc-multimonth-event {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    cursor: default;
+}
+
+.fc-daygrid-event-harness {
+    margin-top: 1px !important;
+}
+
+.fc-event .fc-event-main,
+.fc-daygrid-event .fc-event-main {
+    padding: 0 !important;
+    color: inherit !important;
+}
+
+.ptr-flag {
+    display: inline-block;
+    line-height: 1;
+    font-size: 1rem;
+    padding: 0 1px;
+}
+
+@media (min-width: 1024px) {
+    .ptr-flag {
+        font-size: 0.875rem;
+    }
+}

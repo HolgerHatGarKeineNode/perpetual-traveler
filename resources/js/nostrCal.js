@@ -31,6 +31,11 @@ export default (livewireComponent) => ({
         const that = this;
         const isMobile = window.matchMedia('(max-width: 1023px)').matches;
 
+        const flagOnly = (title) => {
+            const chars = Array.from(title || '');
+            return chars.slice(0, 2).join('');
+        };
+
         this.calendar = new Calendar(this.$refs.cal, {
             plugins: [interactionPlugin, multiMonthPlugin, dayGridPlugin],
             initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
@@ -44,9 +49,14 @@ export default (livewireComponent) => ({
             selectLongPressDelay: 200,
             height: 'auto',
             defaultAllDay: true,
+            displayEventTime: false,
+            dayMaxEvents: false,
             timeZone: 'local',
             firstDay: 1,
             events: events,
+            eventContent: (arg) => ({
+                html: `<span class="ptr-flag" title="${arg.event.title}">${flagOnly(arg.event.title)}</span>`,
+            }),
             select: (info) => {
                 this.newEventStart = info.startStr;
                 this.newEventEnd = info.endStr;
