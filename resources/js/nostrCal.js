@@ -1,10 +1,13 @@
 import {Calendar} from '@fullcalendar/core'
 import multiMonthPlugin from '@fullcalendar/multimonth'
+import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction';
 
 export default (livewireComponent) => ({
 
     calendar: null,
+
+    tab: 'calendar',
 
     modalOpen: false,
 
@@ -17,7 +20,6 @@ export default (livewireComponent) => ({
 
     async init() {
 
-        // map this.events into this format: {title: 'event', start: '2021-01-01'}
         const events = this.events.map(event => {
             return {
                 title: event.title,
@@ -27,13 +29,19 @@ export default (livewireComponent) => ({
         });
 
         const that = this;
+        const isMobile = window.matchMedia('(max-width: 1023px)').matches;
 
         this.calendar = new Calendar(this.$refs.cal, {
-            plugins: [interactionPlugin, multiMonthPlugin],
-            initialView: 'multiMonthYear',
+            plugins: [interactionPlugin, multiMonthPlugin, dayGridPlugin],
+            initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
+            headerToolbar: isMobile
+                ? {left: 'prev,next', center: 'title', right: 'today'}
+                : {left: '', center: 'title', right: ''},
             eventOverlap: false,
             selectable: true,
             unselectAuto: false,
+            longPressDelay: 200,
+            selectLongPressDelay: 200,
             height: 'auto',
             defaultAllDay: true,
             timeZone: 'local',
@@ -42,16 +50,15 @@ export default (livewireComponent) => ({
             select: (info) => {
                 this.newEventStart = info.startStr;
                 this.newEventEnd = info.endStr;
-                console.log(info);
                 this.modalOpen = true;
             },
-            datesSet: function(dateInfo) {
+            datesSet: function (dateInfo) {
                 const startYear = dateInfo.start.getFullYear();
                 const endYear = dateInfo.end.getFullYear();
 
-                if(startYear !== endYear){
-                    console.log('Das Jahr hat gewechselt');
-                    console.log(startYear);
+                if (startYear !== endYear) {
+                    that.currentYear = startYear;
+                } else {
                     that.currentYear = startYear;
                 }
             },
@@ -86,19 +93,14 @@ export default (livewireComponent) => ({
     },
 
     setCountry(country) {
-        console.log(country);
-        // convert newEventStart to Date object
         let start = new Date(this.newEventStart);
         let end = new Date(this.newEventEnd);
-        // end is one day too far, so subtract one day
         end = new Date(end);
         end.setDate(end.getDate() - 1);
-        // create an array of days between start and end
         let days = [];
         for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
             days.push(new Date(d).toISOString().slice(0, 10));
         }
-        console.log(days);
         livewireComponent.call('saveDays', days, country);
 
         this.modalOpen = false;

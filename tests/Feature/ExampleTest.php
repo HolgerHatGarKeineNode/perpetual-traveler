@@ -1,7 +1,15 @@
 <?php
 
-it('returns a successful response', function () {
-    $response = $this->get('/');
+use App\Models\User;
 
-    $response->assertStatus(200);
+it('redirects guests from the root to login', function () {
+    $this->get('/')->assertRedirect('/login');
+});
+
+it('redirects authenticated users from the root to the calendar', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get('/')
+        ->assertRedirect('/calendar');
 });

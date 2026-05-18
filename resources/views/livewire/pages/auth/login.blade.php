@@ -110,11 +110,11 @@ $loginNostr = function ($pubKey) {
             Login with username and password
         </div>
 
-        <form wire:submit="submitLogin">
+        <form wire:submit="submitLogin" class="w-full">
 
             <div>
                 <x-input-label for="name" :value="__('Username')"/>
-                <x-text-input wire:model="form.name" id="name" class="block mt-1 w-full" type="text" name="name"
+                <x-text-input wire:model="form.name" id="name" class="block mt-2 w-full" type="text" name="name"
                               required autofocus autocomplete="username"/>
                 <x-input-error :messages="$errors->get('name')" class="mt-2"/>
             </div>
@@ -122,7 +122,7 @@ $loginNostr = function ($pubKey) {
             <div class="mt-4">
                 <x-input-label for="password" :value="__('Password')"/>
 
-                <x-text-input wire:model="form.password" id="password" class="block mt-1 w-full"
+                <x-text-input wire:model="form.password" id="password" class="block mt-2 w-full"
                               type="password"
                               name="password"
                               required autocomplete="current-password"/>
@@ -130,16 +130,15 @@ $loginNostr = function ($pubKey) {
                 <x-input-error :messages="$errors->get('password')" class="mt-2"/>
             </div>
 
-            <div class="flex items-center justify-end mt-4">
-                <x-primary-button class="ms-3">
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
+                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 text-center sm:text-left"
+                   href="{{ route('register') }}" wire:navigate>
+                    {{ __('Register') }}
+                </a>
+                <x-primary-button class="w-full sm:w-auto justify-center">
                     {{ __('Log in') }}
                 </x-primary-button>
             </div>
-
-            <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
-               href="{{ route('register') }}" wire:navigate>
-                {{ __('Register') }}
-            </a>
         </form>
 
         <div

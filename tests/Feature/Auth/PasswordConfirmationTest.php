@@ -26,8 +26,8 @@ test('password can be confirmed', function () {
     $component->call('confirmPassword');
 
     $component
-        ->assertRedirect('/dashboard')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertRedirect(\App\Providers\RouteServiceProvider::HOME);
 });
 
 test('password is not confirmed with invalid password', function () {

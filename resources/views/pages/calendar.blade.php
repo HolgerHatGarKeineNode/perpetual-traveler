@@ -66,12 +66,6 @@ $saveDays = function ($days, $country) {
         ->toArray();
 };
 
-$setCountry = function ($country) {
-    dd($country);
-
-    $this->modalOpen = false;
-};
-
 mount(function () {
     $currentYear = $this->currentYear ?? now()->year;
 
@@ -136,28 +130,50 @@ updated([
         </div>
     </x-slot>
     @volt
-    <div x-data="nostrCal(@this)">
-        <div class="flex items-center py-4 px-4 sm:px-12">
+    <div x-data="nostrCal(@this)" class="px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
             <div>
-                <div class="flex justify-between items-end mb-1">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400"
-                           for="start">
-                        Choose your start date as a perpetual traveler
-                    </label>
-                </div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1" for="start">
+                    Choose your start date as a perpetual traveler
+                </label>
                 <input
                         id="start"
                         type="date"
+                        class="block w-full sm:w-auto rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base sm:text-sm px-3 py-2"
                         wire:model.live.debounce="start"/>
             </div>
         </div>
-        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-            <div class="p-6 text-gray-900 dark:text-gray-100">
-                <div class="flex space-x-2">
-                    <div wire:ignore class="w-9/12 xl:w-10/12" x-ref="cal"></div>
-                    <div class="w-3/12 xl:w-2/12">
+
+        {{-- Mobile/Tablet Tab-Switch --}}
+        <div class="flex lg:hidden border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden mb-3 bg-white dark:bg-gray-800 shadow-sm">
+            <button type="button" @click="tab='calendar'"
+                    :class="tab==='calendar' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'"
+                    class="flex-1 py-3 text-sm font-medium transition-colors">
+                Calendar
+            </button>
+            <button type="button" @click="tab='stats'"
+                    :class="tab==='stats' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'"
+                    class="flex-1 py-3 text-sm font-medium transition-colors">
+                Statistics
+            </button>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg">
+            <div class="p-3 sm:p-6 text-gray-900 dark:text-gray-100">
+                <div class="lg:flex lg:space-x-4">
+                    {{-- Calendar pane --}}
+                    <div wire:ignore
+                         x-show="tab === 'calendar'"
+                         x-cloak
+                         class="w-full lg:w-9/12 xl:w-10/12 lg:!block"
+                         x-ref="cal"></div>
+
+                    {{-- Stats pane --}}
+                    <div x-show="tab === 'stats'"
+                         x-cloak
+                         class="w-full lg:w-3/12 xl:w-2/12 lg:!block mt-4 lg:mt-0">
                         <div class="lg:flex lg:flex-auto lg:justify-center">
-                            <dl class="space-y-2 w-80">
+                            <dl class="space-y-2 w-full lg:w-80">
                                 @php
                                     // Sorting the events by date
                                     usort($events, function($a, $b) {
@@ -208,32 +224,35 @@ updated([
                                             ];
                                     });
                                 @endphp
+                                @if(count($events) === 0)
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+                                        No events yet. Select days in the calendar to add countries.
+                                    </div>
+                                @endif
                                 @foreach($events as $c => $event)
-                                    <div class="flex flex-col gap-y-1 border p-2 rounded">
-                                        <dd class="text-md font-semibold tracking-tight text-gray-600">{{ $c }}</dd>
-                                        <dt class="text-base font-bold text-gray-600">
+                                    <div class="flex flex-col gap-y-1 border border-gray-200 dark:border-gray-700 p-3 rounded">
+                                        <dd class="text-md font-semibold tracking-tight text-gray-700 dark:text-gray-200">{{ $c }}</dd>
+                                        <dt class="text-base font-bold text-gray-700 dark:text-gray-200">
                                             {{ $event['total_days_as_pt'] }} days - As PT
                                         </dt>
                                         @if($event['total_days_without_pt'] > 0)
-                                            <dt class="text-xs text-gray-600">
+                                            <dt class="text-xs text-gray-600 dark:text-gray-400">
                                                 {{ $event['total_days_without_pt'] }} days - Without PT
                                             </dt>
                                         @endif
-                                        <dt class="text-xs text-gray-600">
+                                        <dt class="text-xs text-gray-600 dark:text-gray-400">
                                             {{ $event['total_days'] }} days - Total
                                         </dt>
-                                        <dt class="text-base text-gray-600 border-t">
+                                        <dt class="text-base text-gray-600 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
                                             Contiguous stays
                                         </dt>
                                         <ul role="list">
                                             @foreach($contiguousStays[$c] as $key => $stay)
                                                 <li class="relative flex flex-col gap-x-1">
-                                                    <div class="text-xs leading-5 text-gray-500">
-                                                        <span
-                                                                class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
+                                                    <div class="text-xs leading-5 text-gray-500 dark:text-gray-400">
+                                                        <span class="font-bold underline">{{ $stay['anzahlTage'] }} days</span>
                                                     </div>
-                                                    <time datetime="2023-01-23T10:32"
-                                                          class="text-xs leading-5 text-gray-500">
+                                                    <time class="text-xs leading-5 text-gray-500 dark:text-gray-400">
                                                         from {{ \Illuminate\Support\Carbon::parse($stay['von'])->format('d.m.Y') }}
                                                         to {{ \Illuminate\Support\Carbon::parse($stay['bis'])->format('d.m.Y') }}
                                                     </time>
@@ -244,10 +263,8 @@ updated([
                                                         @php
                                                             $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis'])) - 1;
                                                         @endphp
-                                                        <div
-                                                                class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif ">
-                                                            {{ $daysInBetween }}
-                                                            days in between
+                                                        <div class="text-xs leading-5 @if($daysInBetween < 21) text-red-500 @else text-green-500 @endif">
+                                                            {{ $daysInBetween }} days in between
                                                         </div>
                                                     </li>
                                                 @endif
@@ -262,11 +279,12 @@ updated([
             </div>
         </div>
 
+        {{-- Country-Select Modal --}}
         <div @keydown.escape.window="modalOpen = false"
              class="relative z-50 w-auto h-auto" x-cloak>
             <template x-teleport="body">
                 <div x-show="modalOpen"
-                     class="fixed top-0 left-0 z-[99] flex items-center justify-center w-screen h-screen" x-cloak>
+                     class="fixed inset-0 z-[99] flex items-end sm:items-center justify-center" x-cloak>
                     <div x-show="modalOpen"
                          x-transition:enter="ease-out duration-300"
                          x-transition:enter-start="opacity-0"
@@ -274,7 +292,8 @@ updated([
                          x-transition:leave="ease-in duration-300"
                          x-transition:leave-start="opacity-100"
                          x-transition:leave-end="opacity-0"
-                         @click="modalOpen=false" class="absolute inset-0 w-full h-full bg-black bg-opacity-40"></div>
+                         @click="modalOpen=false"
+                         class="absolute inset-0 w-full h-full bg-black bg-opacity-50"></div>
                     <div x-show="modalOpen"
                          x-trap.inert.noscroll="modalOpen"
                          x-transition:enter="ease-out duration-300"
@@ -283,11 +302,12 @@ updated([
                          x-transition:leave="ease-in duration-200"
                          x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                          x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                         class="relative w-full py-6 bg-white px-7 max-w-screen-2xl sm:rounded-lg">
-                        <div class="flex items-center justify-between pb-2">
-                            <h3 class="text-lg font-semibold">Choose country</h3>
+                         class="relative w-full sm:w-[95vw] max-w-screen-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto py-4 px-4 sm:py-6 sm:px-7 bg-white dark:bg-gray-800 rounded-t-lg sm:rounded-lg shadow-xl">
+                        <div class="flex items-center justify-between pb-2 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Choose country</h3>
                             <button @click="modalOpen=false"
-                                    class="absolute top-0 right-0 flex items-center justify-center w-8 h-8 mt-5 mr-5 text-gray-600 rounded-full hover:text-gray-800 hover:bg-gray-50">
+                                    aria-label="Close"
+                                    class="flex items-center justify-center w-10 h-10 text-gray-600 dark:text-gray-300 rounded-full hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                      stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -295,38 +315,46 @@ updated([
                             </button>
                         </div>
                         <div class="relative w-auto">
-                            <div class="py-6 flex flex-row justify-between">
-                                <div class="flex items-center px-3 border-b">
+                            <div class="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                                <div class="flex items-center px-3 border border-gray-200 dark:border-gray-700 rounded-md flex-1">
                                     <input
                                             wire:model.live.debounce="search"
                                             type="text"
-                                            class="flex w-full px-2 py-3 text-sm bg-transparent border-0 rounded-md outline-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-neutral-400 h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                                            class="flex w-full px-2 py-3 text-base sm:text-sm bg-transparent border-0 rounded-md outline-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-neutral-400 dark:text-gray-100 h-11 disabled:cursor-not-allowed disabled:opacity-50"
                                             placeholder="Search..." autocomplete="off" autocorrect="off"
                                             spellcheck="false">
                                 </div>
                                 <button type="button" @click="deleteDays"
-                                        class="rounded bg-red-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+                                        class="rounded bg-red-600 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 whitespace-nowrap">
                                     Delete selected days
                                 </button>
                             </div>
-                            <div class="flex flex-wrap py-6 border-t border-b">
-                                @foreach($this->selectedCountries as $country)
-                                    <div
-                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
-                                            @click="setCountry('{{ $country }}')"
-                                            wire:key="c_{{ $country }}">
-                                        {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
-                                    </div>
-                                @endforeach
+                            @if(count($this->selectedCountries))
+                                <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-2">
+                                    Already used
+                                </div>
+                                <div class="flex flex-wrap gap-1 py-3 border-b border-gray-200 dark:border-gray-700">
+                                    @foreach($this->selectedCountries as $country)
+                                        <button type="button"
+                                                @click="setCountry('{{ $country }}')"
+                                                wire:key="c_{{ $country }}"
+                                                class="px-3 py-2 text-sm cursor-pointer text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors rounded-md min-h-[40px]">
+                                            {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                            <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-3">
+                                All countries
                             </div>
-                            <div class="flex flex-wrap">
+                            <div class="flex flex-wrap gap-1 pt-2">
                                 @foreach($this->countries as $country)
-                                    <div
-                                            class="px-2 py-1 text-sm cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 transition-colors rounded-md"
+                                    <button type="button"
                                             @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}">
+                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}"
+                                            class="px-3 py-2 text-sm cursor-pointer text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-900 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors rounded-md min-h-[40px]">
                                         {{ $country['emoji'] }} {{ $country['name'] }}
-                                    </div>
+                                    </button>
                                 @endforeach
                             </div>
                         </div>

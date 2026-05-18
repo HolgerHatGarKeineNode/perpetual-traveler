@@ -15,7 +15,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-sans antialiased">
-<div id="hideForMobile" class="min-h-screen bg-gray-100 dark:bg-gray-900">
+<div class="min-h-screen bg-gray-100 dark:bg-gray-900">
     <livewire:layout.navigation/>
 
     <!-- Page Heading -->
@@ -32,17 +32,6 @@
         {{ $slot }}
     </main>
 </div>
-<div id="showForMobile" style="display: none">
-    This tool does not support mobile devices. Please use a device with a larger screen.
-</div>
 @livewireScriptConfig
-<script>
-    if (window.matchMedia("(max-width: 768px)").matches || window.matchMedia('(pointer: coarse)').matches) {
-        // hideForMobile ausblenden
-        document.getElementById('hideForMobile').style.display = 'none';
-        // showForMobile einblenden
-        document.getElementById('showForMobile').style.display = 'block';
-    }
-</script>
 </body>
 </html>

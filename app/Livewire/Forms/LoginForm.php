@@ -12,6 +12,9 @@ use Livewire\Form;
 
 class LoginForm extends Form
 {
+    #[Validate('required|string')]
+    public string $name = '';
+
     #[Validate('nullable|string|email')]
     public string $email = '';
 
@@ -55,7 +58,7 @@ class LoginForm extends Form
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
+            'name' => trans('auth.throttle', [
                 'seconds' => $seconds,
                 'minutes' => ceil($seconds / 60),
             ]),
@@ -67,6 +70,6 @@ class LoginForm extends Form
      */
     protected function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->email).'|'.request()->ip());
+        return Str::transliterate(Str::lower($this->name).'|'.request()->ip());
     }
 }

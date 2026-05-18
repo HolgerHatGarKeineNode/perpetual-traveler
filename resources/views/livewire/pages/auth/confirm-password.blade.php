@@ -48,7 +48,7 @@ $confirmPassword = function () {
 
             <x-text-input wire:model="password"
                           id="password"
-                          class="block mt-1 w-full"
+                          class="block mt-2 w-full"
                           type="password"
                           name="password"
                           required autocomplete="current-password" />
@@ -56,8 +56,8 @@ $confirmPassword = function () {
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <div class="flex justify-end mt-4">
-            <x-primary-button>
+        <div class="flex flex-col sm:flex-row sm:justify-end mt-6">
+            <x-primary-button class="w-full sm:w-auto justify-center">
                 {{ __('Confirm') }}
             </x-primary-button>
         </div>

@@ -22,13 +22,25 @@ You can sign in with Nostr NIP-07. Also, there is a username-password login.
 
 ### Requirements
 
-- Docker
-- Docker Compose
+- PHP >= 8.2
+- Composer
+- Node.js + Yarn
+
+### Initial setup
+
+```sh
+cp .env.example .env
+composer install
+yarn install
+touch database/database.sqlite
+php artisan key:generate
+php artisan migrate
+```
 
 ### Starting the dev server
 
-```
-./dev.sh
+```sh
+composer run dev
 ```
 
-See the `dev.sh` script for more details.
+This runs `php artisan serve`, `php artisan queue:listen` and `yarn dev` in parallel via `concurrently`.
