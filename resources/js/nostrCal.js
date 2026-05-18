@@ -36,6 +36,12 @@ export default (livewireComponent) => ({
             return chars.slice(0, 2).join('');
         };
 
+        const localISODate = (d) => {
+            const date = d instanceof Date ? d : new Date(d);
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+
         this.calendar = new Calendar(this.$refs.cal, {
             plugins: [interactionPlugin, multiMonthPlugin, dayGridPlugin],
             initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
@@ -60,6 +66,23 @@ export default (livewireComponent) => ({
             select: (info) => {
                 this.newEventStart = info.startStr;
                 this.newEventEnd = info.endStr;
+                this.modalOpen = true;
+            },
+            dateClick: (info) => {
+                // Single-Tap auf einen Tag (Touch-freundlich)
+                const next = new Date(info.date);
+                next.setDate(next.getDate() + 1);
+                this.newEventStart = info.dateStr;
+                this.newEventEnd = localISODate(next);
+                this.modalOpen = true;
+            },
+            eventClick: (info) => {
+                // Tap auf bestehendes Event: Modal mit nur diesem Tag öffnen
+                const start = new Date(info.event.start);
+                const next = new Date(start);
+                next.setDate(next.getDate() + 1);
+                this.newEventStart = localISODate(start);
+                this.newEventEnd = localISODate(next);
                 this.modalOpen = true;
             },
             datesSet: function (dateInfo) {
@@ -89,27 +112,41 @@ export default (livewireComponent) => ({
     },
 
     deleteDays() {
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         let start = new Date(this.newEventStart);
         let end = new Date(this.newEventEnd);
-        end = new Date(end);
         end.setDate(end.getDate() - 1);
         let days = [];
         for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
-            days.push(new Date(d).toISOString().slice(0, 10));
+            days.push(fmt(d));
         }
         livewireComponent.call('deleteDays', days);
 
         this.modalOpen = false;
     },
 
+    rangeLabel() {
+        if (!this.newEventStart || !this.newEventEnd) return '';
+        const fmt = (d) => new Date(d).toLocaleDateString(undefined, {day: '2-digit', month: '2-digit', year: 'numeric'});
+        const start = new Date(this.newEventStart);
+        const endExclusive = new Date(this.newEventEnd);
+        const last = new Date(endExclusive);
+        last.setDate(last.getDate() - 1);
+        const dayCount = Math.round((endExclusive - start) / 86400000);
+        if (dayCount <= 1) return `${fmt(start)} (1 day)`;
+        return `${fmt(start)} – ${fmt(last)} (${dayCount} days)`;
+    },
+
     setCountry(country) {
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         let start = new Date(this.newEventStart);
         let end = new Date(this.newEventEnd);
-        end = new Date(end);
         end.setDate(end.getDate() - 1);
         let days = [];
         for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
-            days.push(new Date(d).toISOString().slice(0, 10));
+            days.push(fmt(d));
         }
         livewireComponent.call('saveDays', days, country);
 

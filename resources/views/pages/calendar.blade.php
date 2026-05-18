@@ -304,7 +304,10 @@ updated([
                          x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                          class="relative w-full sm:w-[95vw] max-w-screen-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto py-4 px-4 sm:py-6 sm:px-7 bg-white dark:bg-gray-800 rounded-t-lg sm:rounded-lg shadow-xl">
                         <div class="flex items-center justify-between pb-2 sticky top-0 bg-white dark:bg-gray-800 z-10">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Choose country</h3>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Choose country</h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="rangeLabel()"></p>
+                            </div>
                             <button @click="modalOpen=false"
                                     aria-label="Close"
                                     class="flex items-center justify-center w-10 h-10 text-gray-600 dark:text-gray-300 rounded-full hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700">
