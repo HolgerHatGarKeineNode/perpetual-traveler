@@ -2,23 +2,25 @@
 
 use App\Livewire\Actions\Logout;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Volt\Component;
 
-use function Livewire\Volt\rules;
-use function Livewire\Volt\state;
+new class extends Component {
+    public string $password = '';
 
-state(['password' => '']);
+    protected function rules(): array
+    {
+        return ['password' => ['required', 'string', 'current_password']];
+    }
 
-rules(['password' => ['required', 'string', 'current_password']]);
+    public function deleteUser(Logout $logout): void
+    {
+        $this->validate();
 
-$deleteUser = function (Logout $logout) {
-    $this->validate();
+        tap(Auth::user(), $logout(...))->delete();
 
-    tap(Auth::user(), $logout(...))->delete();
-
-    $this->redirect('/', navigate: true);
-};
-
-?>
+        $this->redirect('/', navigate: true);
+    }
+}; ?>
 
 <section class="space-y-6">
     <header>

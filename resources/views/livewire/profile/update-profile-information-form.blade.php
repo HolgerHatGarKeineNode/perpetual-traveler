@@ -6,50 +6,56 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
+use Livewire\Volt\Component;
 
-use function Livewire\Volt\state;
+new class extends Component {
+    public string $name = '';
 
-state([
-    'name' => fn () => auth()->user()->name,
-    'email' => fn () => auth()->user()->email
-]);
+    public string $email = '';
 
-$updateProfileInformation = function () {
-    $user = Auth::user();
-
-    $validated = $this->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
-    ]);
-
-    $user->fill($validated);
-
-    if ($user->isDirty('email')) {
-        $user->email_verified_at = null;
+    public function mount(): void
+    {
+        $this->name = Auth::user()->name;
+        $this->email = Auth::user()->email;
     }
 
-    $user->save();
+    public function updateProfileInformation(): void
+    {
+        $user = Auth::user();
 
-    $this->dispatch('profile-updated', name: $user->name);
-};
+        $validated = $this->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
+        ]);
 
-$sendVerification = function () {
-    $user = Auth::user();
+        $user->fill($validated);
 
-    if ($user->hasVerifiedEmail()) {
-        $path = session('url.intended', RouteServiceProvider::HOME);
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
 
-        $this->redirect($path);
+        $user->save();
 
-        return;
+        $this->dispatch('profile-updated', name: $user->name);
     }
 
-    $user->sendEmailVerificationNotification();
+    public function sendVerification(): void
+    {
+        $user = Auth::user();
 
-    Session::flash('status', 'verification-link-sent');
-};
+        if ($user->hasVerifiedEmail()) {
+            $path = session('url.intended', RouteServiceProvider::HOME);
 
-?>
+            $this->redirect($path);
+
+            return;
+        }
+
+        $user->sendEmailVerificationNotification();
+
+        Session::flash('status', 'verification-link-sent');
+    }
+}; ?>
 
 <section>
     <header>

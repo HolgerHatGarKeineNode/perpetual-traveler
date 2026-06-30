@@ -1,53 +1,50 @@
 <?php
 
+use App\Livewire\Forms\LoginForm;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Support\Facades\Session;
+use Livewire\Attributes\Layout;
+use Livewire\Volt\Component;
 
-use App\Livewire\Forms\LoginForm;
+new #[Layout('layouts.guest')] class extends Component {
+    public LoginForm $form;
 
-use function Livewire\Volt\layout;
-use function Livewire\Volt\form;
-use function Livewire\Volt\mount;
-
-layout('layouts.guest');
-
-form(LoginForm::class);
-
-$submitLogin = function () {
-    $this->validate();
-    $this->form->authenticate();
-    Session::regenerate();
-    $this->redirect(
-        session('url.intended', RouteServiceProvider::HOME),
-        navigate: true
-    );
-};
-
-$loginNostr = function ($pubKey) {
-    if ($pubKey) {
-        $user = \App\Models\User::query()
-            ->where('npub', $pubKey)
-            ->firstOrCreate([
-                'npub' => $pubKey,
-            ], [
-                'npub' => $pubKey,
-                'name' => str($pubKey)->limit(20, ''),
-                'password' => bcrypt(str()->random(20)),
-                'email' => str($pubKey)->limit(20, '') . '@nostr.com',
-                'email_verified_at' => now(),
-            ]);
-        auth()->login($user);
+    public function submitLogin(): void
+    {
+        $this->validate();
+        $this->form->authenticate();
         Session::regenerate();
         $this->redirect(
             session('url.intended', RouteServiceProvider::HOME),
             navigate: true
         );
-
-        return redirect()->route('login');
     }
-};
 
-?>
+    public function loginNostr($pubKey)
+    {
+        if ($pubKey) {
+            $user = \App\Models\User::query()
+                ->where('npub', $pubKey)
+                ->firstOrCreate([
+                    'npub' => $pubKey,
+                ], [
+                    'npub' => $pubKey,
+                    'name' => str($pubKey)->limit(20, ''),
+                    'password' => bcrypt(str()->random(20)),
+                    'email' => str($pubKey)->limit(20, '') . '@nostr.com',
+                    'email_verified_at' => now(),
+                ]);
+            auth()->login($user);
+            Session::regenerate();
+            $this->redirect(
+                session('url.intended', RouteServiceProvider::HOME),
+                navigate: true
+            );
+
+            return redirect()->route('login');
+        }
+    }
+}; ?>
 
 <div x-data="nostrApp(@this)">
     <!-- Session Status -->

@@ -6,40 +6,41 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
+use Livewire\Attributes\Layout;
+use Livewire\Volt\Component;
 
-use function Livewire\Volt\layout;
-use function Livewire\Volt\rules;
-use function Livewire\Volt\state;
+new #[Layout('layouts.guest')] class extends Component {
+    public string $name = '';
 
-layout('layouts.guest');
+    public string $email = '';
 
-state([
-    'name' => '',
-    'email' => '',
-    'password' => '',
-    'password_confirmation' => ''
-]);
+    public string $password = '';
 
-rules([
-    'name' => ['required', 'string', 'max:255', 'lowercase', 'unique:' . User::class, 'alpha_dash'],
-    'email' => ['nullable', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
-    'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
-]);
+    public string $password_confirmation = '';
 
-$register = function () {
-    $validated = $this->validate();
-    $validated['email'] = str($validated['name'])->slug('')->lower()->append('@nostr.com');
+    protected function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255', 'lowercase', 'unique:' . User::class, 'alpha_dash'],
+            'email' => ['nullable', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
+            'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
+        ];
+    }
 
-    $validated['password'] = Hash::make($validated['password']);
+    public function register(): void
+    {
+        $validated = $this->validate();
+        $validated['email'] = str($validated['name'])->slug('')->lower()->append('@nostr.com');
 
-    event(new Registered($user = User::create($validated)));
+        $validated['password'] = Hash::make($validated['password']);
 
-    Auth::login($user);
+        event(new Registered($user = User::create($validated)));
 
-    $this->redirect(RouteServiceProvider::HOME, navigate: true);
-};
+        Auth::login($user);
 
-?>
+        $this->redirect(RouteServiceProvider::HOME, navigate: true);
+    }
+}; ?>
 
 <div>
     <form wire:submit="register">
