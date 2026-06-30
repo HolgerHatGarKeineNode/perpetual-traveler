@@ -4,40 +4,42 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Livewire\Volt\Component;
 
-use function Livewire\Volt\rules;
-use function Livewire\Volt\state;
+new class extends Component {
+    public string $current_password = '';
 
-state([
-    'current_password' => '',
-    'password' => '',
-    'password_confirmation' => ''
-]);
+    public string $password = '';
 
-rules([
-    'current_password' => ['required', 'string', 'current_password'],
-    'password' => ['required', 'string', Password::defaults(), 'confirmed'],
-]);
+    public string $password_confirmation = '';
 
-$updatePassword = function () {
-    try {
-        $validated = $this->validate();
-    } catch (ValidationException $e) {
-        $this->reset('current_password', 'password', 'password_confirmation');
-
-        throw $e;
+    protected function rules(): array
+    {
+        return [
+            'current_password' => ['required', 'string', 'current_password'],
+            'password' => ['required', 'string', Password::defaults(), 'confirmed'],
+        ];
     }
 
-    Auth::user()->update([
-        'password' => Hash::make($validated['password']),
-    ]);
+    public function updatePassword(): void
+    {
+        try {
+            $validated = $this->validate();
+        } catch (ValidationException $e) {
+            $this->reset('current_password', 'password', 'password_confirmation');
 
-    $this->reset('current_password', 'password', 'password_confirmation');
+            throw $e;
+        }
 
-    $this->dispatch('password-updated');
-};
+        Auth::user()->update([
+            'password' => Hash::make($validated['password']),
+        ]);
 
-?>
+        $this->reset('current_password', 'password', 'password_confirmation');
+
+        $this->dispatch('password-updated');
+    }
+}; ?>
 
 <section>
     <header>
