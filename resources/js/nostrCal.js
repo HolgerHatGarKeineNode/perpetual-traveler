@@ -86,14 +86,10 @@ export default (livewireComponent) => ({
                 this.modalOpen = true;
             },
             datesSet: function (dateInfo) {
-                const startYear = dateInfo.start.getFullYear();
-                const endYear = dateInfo.end.getFullYear();
-
-                if (startYear !== endYear) {
-                    that.currentYear = startYear;
-                } else {
-                    that.currentYear = startYear;
-                }
+                // Month grids bleed into the neighbouring month/year, so the first
+                // visible cell is unreliable; take the midpoint of the visible range.
+                const mid = new Date((dateInfo.start.getTime() + dateInfo.end.getTime()) / 2);
+                that.currentYear = mid.getFullYear();
             },
         });
 

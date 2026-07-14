@@ -46,3 +46,11 @@
         font-size: 0.875rem;
     }
 }
+
+/* Touch: let a drag that starts on a day cell select days instead of scrolling
+   the page away mid-selection. Page still scrolls from the toolbar/margins. */
+@media (max-width: 1023px) {
+    .fc .fc-daygrid-day {
+        touch-action: none;
+    }
+}
