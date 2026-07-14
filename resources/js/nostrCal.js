@@ -47,7 +47,7 @@ export default (livewireComponent) => ({
             initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
             headerToolbar: isMobile
                 ? {left: 'prev,next', center: 'title', right: 'today'}
-                : {left: '', center: 'title', right: ''},
+                : {left: 'prev,next', center: 'title', right: 'today'},
             eventOverlap: false,
             selectable: true,
             unselectAuto: false,
