@@ -95,6 +95,11 @@ export default (livewireComponent) => ({
 
         this.calendar.render();
 
+        // Mobile: the pane is still zero-width at init (x-cloak/x-show), so the
+        // first render mis-sizes. Recompute once it actually has a width.
+        new ResizeObserver(() => this.calendar && this.calendar.updateSize())
+            .observe(this.$refs.cal);
+
         this.$watch('events', (newEvents) => {
             this.calendar.removeAllEvents();
             this.calendar.addEventSource(newEvents.map(event => {
