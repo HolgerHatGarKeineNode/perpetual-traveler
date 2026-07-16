@@ -47,7 +47,7 @@ export default (livewireComponent) => ({
             initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
             headerToolbar: isMobile
                 ? {left: 'prev,next', center: 'title', right: 'today'}
-                : {left: '', center: 'title', right: ''},
+                : {left: 'prev,next', center: 'title', right: 'today'},
             eventOverlap: false,
             selectable: true,
             unselectAuto: false,
@@ -86,18 +86,19 @@ export default (livewireComponent) => ({
                 this.modalOpen = true;
             },
             datesSet: function (dateInfo) {
-                const startYear = dateInfo.start.getFullYear();
-                const endYear = dateInfo.end.getFullYear();
-
-                if (startYear !== endYear) {
-                    that.currentYear = startYear;
-                } else {
-                    that.currentYear = startYear;
-                }
+                // Month grids bleed into the neighbouring month/year, so the first
+                // visible cell is unreliable; take the midpoint of the visible range.
+                const mid = new Date((dateInfo.start.getTime() + dateInfo.end.getTime()) / 2);
+                that.currentYear = mid.getFullYear();
             },
         });
 
         this.calendar.render();
+
+        // Mobile: the pane is still zero-width at init (x-cloak/x-show), so the
+        // first render mis-sizes. Recompute once it actually has a width.
+        new ResizeObserver(() => this.calendar && this.calendar.updateSize())
+            .observe(this.$refs.cal);
 
         this.$watch('events', (newEvents) => {
             this.calendar.removeAllEvents();

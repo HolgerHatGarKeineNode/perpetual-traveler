@@ -46,3 +46,15 @@
         font-size: 0.875rem;
     }
 }
+
+/* Touch: let a drag that starts anywhere on a day cell (incl. the day number,
+   a flag or the highlight overlay — touch-action doesn't inherit, so the
+   children need it too) drive FullCalendar's selection instead of scrolling the
+   page. FullCalendar then auto-scrolls near the edges so the bottom rows stay
+   reachable mid-drag. Page still scrolls from the toolbar/margins/stats. */
+@media (max-width: 1023px) {
+    .fc .fc-daygrid-day,
+    .fc .fc-daygrid-day * {
+        touch-action: none;
+    }
+}
