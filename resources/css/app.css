@@ -14,15 +14,18 @@
    existing dark: utilities.
    ========================================================================= */
 @theme {
-    /* Type roles — a deliberate trio:
-       display = Space Grotesk (instrument/transit-signage character),
+    /* Type roles — a deliberate trio, tuned for legibility first:
+       display = Sora (calm geometric grotesque; keeps the transit/signage
+                 character but far quieter & clearer than Space Grotesk),
        sans    = Inter (quiet workhorse for body & UI),
-       mono    = Space Mono (the "data" voice: codes, dates, counts). */
+       mono    = JetBrains Mono (the "data" voice: codes, dates, counts —
+                 designed for small-size legibility, tall x-height, and
+                 unambiguous 0/O · 1/l/I, so it stays readable at 11px). */
     --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
         'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'Space Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+    --font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
     /* Passport-navy ink ramp (base neutrals) */
     --color-navy-50: #f3f6fb;
@@ -214,6 +217,136 @@
         .pt-gap-rail {
             border-left-color: color-mix(in srgb, var(--color-navy-300) 30%, transparent);
         }
+    }
+
+    /* =====================================================================
+       FAQ accordion — border-control "questions on arrival".
+       Single-open disclosure. The open row reads like a stamped entry:
+       a gold ink edge + a faint gold tint. State is signalled on THREE
+       channels (the +/- glyph, aria-expanded, the revealed panel), so
+       colour is never the sole carrier (WCAG 1.4.1).
+       Height animates via the grid 0fr<->1fr technique — no JS height
+       math, and it inherits the global reduced-motion clamp above.
+       ===================================================================== */
+    .faq-item + .faq-item {
+        border-top: 1px solid var(--color-navy-100);
+    }
+
+    .faq-trigger {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        width: 100%;
+        min-height: 3.5rem; /* >=44px touch target (WCAG 2.5.8 / Apple HIG) */
+        padding: 1.25rem 0.5rem 1.25rem 1rem;
+        text-align: left;
+        background: transparent;
+        border-left: 2px solid transparent;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+    }
+    .faq-trigger:hover {
+        background: color-mix(in srgb, var(--color-navy-500) 4%, transparent);
+    }
+    .faq-trigger[aria-expanded="true"] {
+        border-left-color: var(--color-gold-500);
+        background: color-mix(in srgb, var(--color-gold-400) 7%, transparent);
+    }
+
+    .faq-q {
+        flex: 1;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 1.0625rem; /* 17px */
+        line-height: 1.35;
+        letter-spacing: -0.01em;
+        color: var(--color-navy-800); /* ~11:1 on white */
+    }
+    .faq-trigger[aria-expanded="true"] .faq-q {
+        color: var(--color-navy-900);
+    }
+
+    /* Indicator: a plus that becomes a minus — expand/collapse semantics,
+       not a decorative chevron. Navy keeps it >=3:1 as a UI control (1.4.11). */
+    .faq-ind {
+        position: relative;
+        flex: none;
+        width: 1.25rem;
+        height: 1.25rem;
+        color: var(--color-navy-600);
+    }
+    .faq-ind::before,
+    .faq-ind::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        background: currentColor;
+        border-radius: 2px;
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .faq-ind::before { /* horizontal bar */
+        width: 1.05rem;
+        height: 2px;
+        transform: translate(-50%, -50%);
+    }
+    .faq-ind::after { /* vertical bar — collapses when open */
+        width: 2px;
+        height: 1.05rem;
+        transform: translate(-50%, -50%);
+    }
+    .faq-trigger[aria-expanded="true"] .faq-ind {
+        color: var(--color-gold-600); /* dark gold, >=4.5:1 even on the tint */
+    }
+    .faq-trigger[aria-expanded="true"] .faq-ind::after {
+        transform: translate(-50%, -50%) scaleY(0);
+    }
+
+    /* Panel: grid 0fr -> 1fr reveal, inner clips + fades */
+    .faq-panel {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .faq-panel[data-open="true"] {
+        grid-template-rows: 1fr;
+    }
+    .faq-panel-inner {
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .faq-panel[data-open="true"] .faq-panel-inner {
+        opacity: 1;
+    }
+    .faq-a {
+        max-width: 65ch; /* keep the answer at a readable measure */
+        padding: 0 1rem 1.5rem 1rem;
+        font-size: 0.9688rem; /* ~15.5px */
+        line-height: 1.6;
+        color: var(--color-navy-600); /* ~7:1 on white */
+    }
+    .faq-a a {
+        color: var(--color-gold-600);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .faq-a a:hover {
+        color: var(--color-gold-500);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .faq-item + .faq-item { border-top-color: rgba(255, 255, 255, 0.10); }
+        .faq-trigger:hover { background: rgba(255, 255, 255, 0.03); }
+        .faq-trigger[aria-expanded="true"] {
+            background: color-mix(in srgb, var(--color-gold-400) 9%, transparent);
+        }
+        .faq-q { color: var(--color-navy-100); }
+        .faq-trigger[aria-expanded="true"] .faq-q { color: #fff; }
+        .faq-ind { color: var(--color-navy-200); }
+        .faq-trigger[aria-expanded="true"] .faq-ind { color: var(--color-gold-300); }
+        .faq-a { color: var(--color-navy-300); }
+        .faq-a a { color: var(--color-gold-300); }
+        .faq-a a:hover { color: var(--color-gold-400); }
     }
 }
 
