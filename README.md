@@ -4,8 +4,6 @@
 
 Clearnet: https://pt.codingarena.top
 
-Tor: http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion
-
 ### Description
 
 A Perpetual Traveler's calendar. This is a simple calendar app that allows you to keep track of your travels. It's

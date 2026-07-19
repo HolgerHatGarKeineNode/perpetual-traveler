@@ -39,10 +39,6 @@ new class extends Component {
                        class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-navy-500 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 hover:border-navy-200 dark:hover:border-white/20 transition duration-150 ease-in-out">
                         Source
                     </a>
-                    <a href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/"
-                       class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-navy-500 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 hover:border-navy-200 dark:hover:border-white/20 transition duration-150 ease-in-out">
-                        Tor Onion
-                    </a>
                 </div>
             </div>
 
@@ -87,10 +83,6 @@ new class extends Component {
             <a target="_blank" href="https://github.com/HolgerHatGarKeineNode/perpetual-traveler"
                class="block w-full ps-3 pe-4 py-3 border-l-4 border-transparent text-start text-base font-medium text-navy-600 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 hover:bg-navy-100/60 dark:hover:bg-white/5 hover:border-navy-200 focus:outline-none transition duration-150 ease-in-out">
                 Source Code (GitHub)
-            </a>
-            <a href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/"
-               class="block w-full ps-3 pe-4 py-3 border-l-4 border-transparent text-start text-base font-medium text-navy-600 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 hover:bg-navy-100/60 dark:hover:bg-white/5 hover:border-navy-200 focus:outline-none transition duration-150 ease-in-out break-all">
-                Tor Onion
             </a>
         </div>
 

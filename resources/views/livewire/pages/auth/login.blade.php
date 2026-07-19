@@ -108,11 +108,4 @@ new #[Layout('layouts.guest')] class extends Component {
             </x-primary-button>
         </div>
     </form>
-
-    <div class="mt-6 pt-5 border-t border-navy-100 dark:border-white/10 text-center">
-        <a class="eyebrow text-navy-400 dark:text-navy-300 hover:text-nostr-500 dark:hover:text-nostr-400 transition"
-           href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login">
-            Prefer Tor? Open the .onion
-        </a>
-    </div>
 </div>
