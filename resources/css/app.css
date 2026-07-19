@@ -84,6 +84,11 @@
         background-color: var(--color-gold-400);
         color: var(--color-navy-950);
     }
+
+    /* Alpine: hide x-cloak elements until Alpine initialises (no flash) */
+    [x-cloak] {
+        display: none !important;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -6,7 +6,7 @@ use App\Models\Event;
 
 middleware(['auth']);
 
-state(['events', 'currentYear', 'start', 'search', 'selectedCountries']);
+state(['events', 'currentYear', 'start', 'selectedCountries']);
 
 rules([
     'start' => 'required|date',
@@ -105,15 +105,6 @@ updated([
         $user = auth()->user();
         $user->pt_start = \Illuminate\Support\Carbon::parse($this->start)->startOfDay();
         $user->save();
-    },
-    'search' => function () {
-        if ($this->search) {
-            $this->countries = collect(countries())
-                ->filter(fn($country) => str($country['name'])->lower()->contains(str($this->search)->lower()))
-                ->sortBy('name');
-        } else {
-            $this->countries = collect(countries())->sortBy('name');
-        }
     },
 ]);
 
@@ -339,51 +330,144 @@ updated([
                                 </svg>
                             </button>
                         </div>
-                        <div class="relative w-auto">
+                        @php
+                            $allCountries = $this->countries->values();
+                            $grouped = $allCountries
+                                ->groupBy(fn($c) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($c['name'], 0, 1)))
+                                ->sortKeys();
+                            // letter => [lowercased names] for Alpine's instant filter/count
+                            $groupsForJs = $grouped
+                                ->map(fn($list) => $list->map(fn($c) => \Illuminate\Support\Str::lower($c['name']))->values()->all())
+                                ->all();
+                            $letters = $grouped->keys()->all();
+                        @endphp
+                        <div class="relative w-auto"
+                             x-data="{
+                                q: '',
+                                groups: @js($groupsForJs),
+                                get needle() { return this.q.trim().toLowerCase(); },
+                                matchName(n) { return !this.needle || n.includes(this.needle); },
+                                groupCount(l) {
+                                    const g = this.groups[l];
+                                    if (!g) return 0;
+                                    return this.needle ? g.filter(n => n.includes(this.needle)).length : g.length;
+                                },
+                                get total() {
+                                    return Object.values(this.groups)
+                                        .reduce((s, a) => s + (this.needle ? a.filter(n => n.includes(this.needle)).length : a.length), 0);
+                                },
+                                clear() { this.q = ''; this.$refs.q?.focus(); },
+                                jump(l) { document.getElementById('grp-' + l)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+                                selectFirst() {
+                                    const b = [...this.$refs.list.querySelectorAll('button[data-country]')].find(el => el.offsetParent !== null);
+                                    if (b) b.click();
+                                },
+                             }"
+                             x-effect="modalOpen ? $nextTick(() => $refs.q?.focus()) : (q = '')">
+
+                            {{-- Controls: instant search + clear-days --}}
                             <div class="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                                 <div class="flex items-center px-3 border border-navy-200 dark:border-white/10 bg-white dark:bg-navy-950/60 rounded-lg flex-1 focus-within:border-gold-400 focus-within:ring-2 focus-within:ring-gold-400/40 transition">
                                     <svg class="w-4 h-4 text-navy-400 dark:text-navy-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                         <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/>
                                     </svg>
                                     <input
-                                            wire:model.live.debounce="search"
+                                            x-ref="q"
+                                            x-model="q"
+                                            @keydown.enter.prevent="selectFirst()"
+                                            @keydown.escape="if (q) { q = ''; $event.stopPropagation(); }"
                                             type="text"
+                                            aria-label="Search countries"
                                             class="flex w-full px-2 py-3 text-base sm:text-sm bg-transparent border-0 rounded-lg outline-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-navy-400 dark:placeholder:text-navy-300 text-navy-900 dark:text-navy-100 h-11 disabled:cursor-not-allowed disabled:opacity-50"
-                                            placeholder="Search countries..." autocomplete="off" autocorrect="off"
+                                            placeholder="Search countries…" autocomplete="off" autocorrect="off"
                                             spellcheck="false">
+                                    <button type="button" x-show="q" x-cloak @click="clear()" aria-label="Clear search"
+                                            class="flex items-center justify-center w-9 h-9 shrink-0 text-navy-400 dark:text-navy-300 rounded-full hover:text-navy-900 dark:hover:text-navy-100 hover:bg-navy-100/60 dark:hover:bg-white/5 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path stroke-linecap="round" d="M6 18 18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
                                 </div>
                                 <button type="button" @click="deleteDays"
                                         class="inline-flex items-center justify-center gap-2 min-h-[44px] rounded-lg bg-risk px-4 py-3 sm:py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-risk/90 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-risk whitespace-nowrap transition">
                                     Clear these days
                                 </button>
                             </div>
+
+                            {{-- Recently used (hidden while searching to keep the field of view clean) --}}
                             @if(count($this->selectedCountries))
-                                <div class="eyebrow text-navy-400 dark:text-navy-300 mt-2">
-                                    Recently used
-                                </div>
-                                <div class="flex flex-wrap gap-1.5 py-3 border-b border-navy-100 dark:border-white/10">
-                                    @foreach($this->selectedCountries as $country)
-                                        <button type="button"
-                                                @click="setCountry('{{ $country }}')"
-                                                wire:key="c_{{ $country }}"
-                                                class="px-3 py-2 text-sm cursor-pointer text-navy-900 dark:text-navy-100 bg-navy-100/70 dark:bg-white/5 border border-transparent hover:border-gold-400 hover:bg-gold-400/10 transition-colors rounded-lg min-h-[44px]">
-                                            {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
-                                        </button>
-                                    @endforeach
+                                <div x-show="!needle" x-cloak>
+                                    <div class="eyebrow text-navy-400 dark:text-navy-300 mt-1">
+                                        Recently used
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 py-3 border-b border-navy-100 dark:border-white/10">
+                                        @foreach($this->selectedCountries as $country)
+                                            <button type="button"
+                                                    @click="setCountry('{{ $country }}')"
+                                                    wire:key="c_{{ $country }}"
+                                                    class="inline-flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-navy-900 dark:text-navy-100 bg-navy-100/70 dark:bg-white/5 border border-transparent hover:border-gold-400 hover:bg-gold-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 transition-colors rounded-lg min-h-[44px]">
+                                                {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
+                                            </button>
+                                        @endforeach
+                                    </div>
                                 </div>
                             @endif
-                            <div class="eyebrow text-navy-400 dark:text-navy-300 mt-4">
-                                All countries
+
+                            {{-- List heading + live count --}}
+                            <div class="flex items-baseline justify-between gap-3 mt-4 mb-1">
+                                <div class="eyebrow text-navy-400 dark:text-navy-300">
+                                    <span x-show="!needle">All countries</span>
+                                    <span x-show="needle" x-cloak x-text="total + (total === 1 ? ' match' : ' matches')"></span>
+                                </div>
+                                <span x-show="needle && total > 0" x-cloak class="eyebrow text-navy-400 dark:text-navy-300">&crarr; stamps top match</span>
                             </div>
-                            <div class="flex flex-wrap gap-1.5 pt-2">
-                                @foreach($this->countries as $country)
-                                    <button type="button"
-                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
-                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}"
-                                            class="px-3 py-2 text-sm cursor-pointer text-navy-700 dark:text-navy-200 border border-transparent hover:border-gold-400 hover:bg-gold-400/10 hover:text-navy-900 dark:hover:text-navy-50 transition-colors rounded-lg min-h-[44px]">
-                                        {{ $country['emoji'] }} {{ $country['name'] }}
-                                    </button>
-                                @endforeach
+
+                            {{-- Grouped list + A–Z jump rail --}}
+                            <div class="relative">
+                                <div x-ref="list"
+                                     class="max-h-[52vh] sm:max-h-[56vh] overflow-y-auto pr-1 sm:pr-8 scroll-pt-9"
+                                     style="scroll-behavior: smooth;">
+                                    @foreach($grouped as $letter => $list)
+                                        <section wire:key="grp_{{ $letter }}" x-show="groupCount('{{ $letter }}') > 0" x-cloak>
+                                            <div id="grp-{{ $letter }}" class="sticky top-0 z-10 bg-white dark:bg-navy-900 flex items-center gap-3 py-1.5">
+                                                <span class="font-mono text-sm font-bold text-gold-600 dark:text-gold-300">{{ $letter }}</span>
+                                                <span class="h-px flex-1 bg-navy-100 dark:bg-white/10"></span>
+                                            </div>
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 pb-3 pt-1">
+                                                @foreach($list as $country)
+                                                    <button type="button"
+                                                            data-country
+                                                            x-show="matchName(@js(\Illuminate\Support\Str::lower($country['name'])))"
+                                                            @click="setCountry('{{ $country['iso_3166_1_alpha2'] }}')"
+                                                            wire:key="c_{{ $country['iso_3166_1_alpha2'] }}"
+                                                            class="flex items-center gap-2 px-3 py-2 min-h-[44px] text-left text-sm rounded-lg border border-transparent text-navy-700 dark:text-navy-200 hover:border-gold-400 hover:bg-gold-400/10 hover:text-navy-900 dark:hover:text-navy-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 transition-colors">
+                                                        <span class="text-base leading-none shrink-0">{{ $country['emoji'] }}</span>
+                                                        <span class="truncate">{{ $country['name'] }}</span>
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        </section>
+                                    @endforeach
+
+                                    {{-- No results --}}
+                                    <div x-show="total === 0" x-cloak class="pt-stamp bg-navy-50/60 dark:bg-navy-950/40 px-5 py-10 text-center my-2">
+                                        <div class="text-2xl mb-2">🔍</div>
+                                        <p class="font-display font-semibold text-navy-900 dark:text-navy-50">No country matches “<span x-text="q"></span>”</p>
+                                        <p class="mt-1.5 text-sm text-navy-500 dark:text-navy-300">Try the English name — e.g. “Czechia”, “Netherlands”, “United States”.</p>
+                                    </div>
+                                </div>
+
+                                {{-- A–Z rail: supplementary pointer shortcut (search + list are the
+                                     accessible path, so this is hidden on small screens & out of tab order) --}}
+                                <nav x-show="!needle" x-cloak aria-label="Jump to letter"
+                                     class="hidden sm:flex absolute right-0 top-0 bottom-0 flex-col items-center justify-center select-none">
+                                    @foreach($letters as $letter)
+                                        <button type="button" tabindex="-1" @click="jump('{{ $letter }}')"
+                                                class="font-mono text-[0.65rem] leading-none px-1.5 py-[0.12rem] text-navy-400 dark:text-navy-300 hover:text-gold-600 dark:hover:text-gold-300 rounded transition-colors">
+                                            {{ $letter }}
+                                        </button>
+                                    @endforeach
+                                </nav>
                             </div>
                         </div>
                     </div>
