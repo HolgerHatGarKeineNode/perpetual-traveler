@@ -50,99 +50,69 @@ new #[Layout('layouts.guest')] class extends Component {
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')"/>
 
-    <div class="flex flex-col space-y-4 items-center justify-end mt-4">
+    <div class="reveal reveal-1">
+        <p class="eyebrow text-gold-600 dark:text-gold-300">Welcome back</p>
+        <h1 class="mt-2 font-display text-2xl font-bold tracking-tight text-navy-900 dark:text-navy-50">
+            Log in to your calendar
+        </h1>
+    </div>
 
-        <div class="py-8">
-            <h1 x-data="{
-                startingAnimation: { opacity: 0, scale: 4 },
-                endingAnimation: { opacity: 1, scale: 1, stagger: 0.07, duration: 1, ease: 'expo.out' },
-                addCNDScript: true,
-                animateText() {
-                    $el.classList.remove('invisible');
-                    gsap.fromTo($el.children, this.startingAnimation, this.endingAnimation);
-                },
-                splitCharactersIntoSpans(element) {
-                    text = element.innerHTML;
-                    modifiedHTML = [];
-                    for (var i = 0; i < text.length; i++) {
-                        attributes = '';
-                        if(text[i].trim()){ attributes = 'class=\'inline-block\''; }
-                        modifiedHTML.push('<span ' + attributes + '>' + text[i] + '</span>');
-                    }
-                    element.innerHTML = modifiedHTML.join('');
-                },
-                addScriptToHead(url) {
-                    script = document.createElement('script');
-                    script.src = url;
-                    document.head.appendChild(script);
-                }
-            }"
-                x-init="
-                splitCharactersIntoSpans($el);
-                if(addCNDScript){
-                    addScriptToHead('https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js');
-                }
-                gsapInterval = setInterval(function(){
-                    if(typeof gsap !== 'undefined'){
-                        animateText();
-                        clearInterval(gsapInterval);
-                    }
-                }, 5);
-            "
-                class="invisible block text-xl font-bold custom-font"
-            >
-                Perpetual Traveler - Calendar
-            </h1>
-        </div>
-
-        <x-primary-button class="ms-3" @click="initNDK">
-            {{ __('Nostr NIP-07 login') }}
-        </x-primary-button>
-
-        <a target="_blank" href="https://nostr.com" class="text-sm text-purple-500 hover:text-purple-500">
+    {{-- Nostr login — the key-based path, in its own identity colour --}}
+    <div class="mt-6 reveal reveal-2">
+        <button type="button" @click="initNDK"
+                class="w-full inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-lg font-semibold text-sm text-white bg-nostr-500 hover:bg-nostr-600 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nostr-400 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 11a5 5 0 1 1 4 4.9V22H7v-2H5v-2h2v-1.1A5 5 0 0 1 7 11Z" fill="currentColor"/>
+            </svg>
+            {{ __('Continue with Nostr key') }}
+        </button>
+        <a target="_blank" href="https://nostr.com"
+           class="mt-2 inline-block text-xs text-nostr-500 dark:text-nostr-400 hover:underline">
             {{ __('What is NIP-07 and how do I get a Nostr key?') }}
         </a>
+    </div>
 
-        <div class="text-center text-xl text-gray-900 my-6">
-            Login with username and password
+    {{-- Divider --}}
+    <div class="flex items-center gap-3 my-6" aria-hidden="true">
+        <div class="h-px flex-1 bg-navy-100 dark:bg-white/10"></div>
+        <span class="eyebrow text-navy-400 dark:text-navy-300">or password</span>
+        <div class="h-px flex-1 bg-navy-100 dark:bg-white/10"></div>
+    </div>
+
+    <form wire:submit="submitLogin" class="w-full reveal reveal-3">
+        <div>
+            <x-input-label for="name" :value="__('Username')"/>
+            <x-text-input wire:model="form.name" id="name" class="block mt-2 w-full" type="text" name="name"
+                          required autocomplete="username"/>
+            <x-input-error :messages="$errors->get('name')" class="mt-2"/>
         </div>
 
-        <form wire:submit="submitLogin" class="w-full">
+        <div class="mt-4">
+            <x-input-label for="password" :value="__('Password')"/>
 
-            <div>
-                <x-input-label for="name" :value="__('Username')"/>
-                <x-text-input wire:model="form.name" id="name" class="block mt-2 w-full" type="text" name="name"
-                              required autofocus autocomplete="username"/>
-                <x-input-error :messages="$errors->get('name')" class="mt-2"/>
-            </div>
+            <x-text-input wire:model="form.password" id="password" class="block mt-2 w-full"
+                          type="password"
+                          name="password"
+                          required autocomplete="current-password"/>
 
-            <div class="mt-4">
-                <x-input-label for="password" :value="__('Password')"/>
-
-                <x-text-input wire:model="form.password" id="password" class="block mt-2 w-full"
-                              type="password"
-                              name="password"
-                              required autocomplete="current-password"/>
-
-                <x-input-error :messages="$errors->get('password')" class="mt-2"/>
-            </div>
-
-            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 text-center sm:text-left"
-                   href="{{ route('register') }}" wire:navigate>
-                    {{ __('Register') }}
-                </a>
-                <x-primary-button class="w-full sm:w-auto justify-center">
-                    {{ __('Log in') }}
-                </x-primary-button>
-            </div>
-        </form>
-
-        <div
-            class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out">
-            <a class="underline text-purple-500"
-               href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login">Onion/Tor</a>
+            <x-input-error :messages="$errors->get('password')" class="mt-2"/>
         </div>
 
+        <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
+            <a class="text-sm font-medium text-navy-500 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 rounded-md focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 text-center sm:text-left"
+               href="{{ route('register') }}" wire:navigate>
+                {{ __('Create an account') }}
+            </a>
+            <x-primary-button class="w-full sm:w-auto justify-center">
+                {{ __('Log in') }}
+            </x-primary-button>
+        </div>
+    </form>
+
+    <div class="mt-6 pt-5 border-t border-navy-100 dark:border-white/10 text-center">
+        <a class="eyebrow text-navy-400 dark:text-navy-300 hover:text-nostr-500 dark:hover:text-nostr-400 transition"
+           href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/login">
+            Prefer Tor? Open the .onion
+        </a>
     </div>
 </div>

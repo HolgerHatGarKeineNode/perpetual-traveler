@@ -6,13 +6,217 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views';
 @source '../../storage/framework/views';
 
+/* =========================================================================
+   Perpetual Traveler — Design System "Transit / Border Control"
+   Identity: passport navy (cover), gold foil (emboss/accent), stamp ink,
+   machine-readable-zone mono for data. Neutrals + ONE accent (gold).
+   Dark mode is system-driven (prefers-color-scheme), matching the app's
+   existing dark: utilities.
+   ========================================================================= */
 @theme {
-    --font-sans: 'Figtree', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    /* Type roles — a deliberate trio:
+       display = Space Grotesk (instrument/transit-signage character),
+       sans    = Inter (quiet workhorse for body & UI),
+       mono    = Space Mono (the "data" voice: codes, dates, counts). */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
         'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Space Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+    /* Passport-navy ink ramp (base neutrals) */
+    --color-navy-50: #f3f6fb;
+    --color-navy-100: #d8e0ee;
+    --color-navy-200: #b4c0d8;
+    --color-navy-300: #8595b8;
+    --color-navy-400: #5b739e;
+    --color-navy-500: #3d5480;
+    --color-navy-600: #2c4066;
+    --color-navy-700: #203050;
+    --color-navy-800: #16233f;
+    --color-navy-900: #0f1a33;
+    --color-navy-950: #0a1020;
+
+    /* Gold foil — the single brand accent */
+    --color-gold-300: #f6cd6e;
+    --color-gold-400: #efb23e;
+    --color-gold-500: #d9971c;
+    /* gold-600 is used only as a foreground accent; kept dark enough to pass
+       AA (>=4.5:1) as small text on light surfaces (~5.3:1 on white). */
+    --color-gold-600: #8f6210;
+
+    /* Nostr identity (used ONLY for Nostr/key actions — a real brand signal) */
+    --color-nostr-400: #a78bfa;
+    --color-nostr-500: #7c5ce6;
+    --color-nostr-600: #6d47e0;
+
+    /* Stamp semantics — gap-in-days risk (re-entry) / approved stay */
+    --color-risk: #c0362c;        /* on light surfaces */
+    --color-risk-bright: #f2777c; /* on dark surfaces */
+    --color-ok: #17794a;          /* on light surfaces */
+    --color-ok-bright: #46c48a;   /* on dark surfaces */
 }
 
-/* FullCalendar: zeige nur die Länder-Flagge als kompakte Anzeige */
+/* -------------------------------------------------------------------------
+   Base
+   ------------------------------------------------------------------------- */
+@layer base {
+    body {
+        background-color: var(--color-navy-50);
+        color: var(--color-navy-900);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        body {
+            background-color: var(--color-navy-950);
+            color: var(--color-navy-100);
+        }
+    }
+
+    /* Visible keyboard focus everywhere (WCAG 2.4.7) — gold ring */
+    :focus-visible {
+        outline: 2px solid var(--color-gold-400);
+        outline-offset: 2px;
+        border-radius: 3px;
+    }
+
+    ::selection {
+        background-color: var(--color-gold-400);
+        color: var(--color-navy-950);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* -------------------------------------------------------------------------
+   Signature utilities — kept in @layer components so Tailwind utilities
+   (e.g. a text-[...] size override on .eyebrow) still win over them.
+   @keyframes stay unlayered (they are not subject to the cascade).
+   ------------------------------------------------------------------------- */
+@keyframes pt-rise {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@keyframes pt-float {
+    0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+    50% { transform: translateY(-6px) rotate(var(--tilt, 0deg)); }
+}
+
+@layer components {
+    /* Mono "boarding-pass" eyebrow — the system/data voice */
+    .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem; /* 11px */
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        line-height: 1.2;
+    }
+
+    /* Page-load reveal — one orchestrated moment, CSS-only, stagger via delay */
+    .reveal {
+        animation: pt-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .reveal-1 { animation-delay: 0.05s; }
+    .reveal-2 { animation-delay: 0.14s; }
+    .reveal-3 { animation-delay: 0.23s; }
+    .reveal-4 { animation-delay: 0.32s; }
+
+    /* Slow ambient drift for the hero stamp collage */
+    .pt-float {
+        animation: pt-float 7s ease-in-out infinite;
+    }
+
+    /* Atmospheric backdrop for hero/auth — night sky at altitude, restrained */
+    .aurora {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .aurora::before,
+    .aurora::after {
+        content: '';
+        position: absolute;
+        border-radius: 9999px;
+        filter: blur(90px);
+    }
+    .aurora::before {
+        width: 46rem;
+        height: 46rem;
+        top: -18rem;
+        right: -12rem;
+        background: radial-gradient(circle at center, var(--color-gold-400), transparent 68%);
+        opacity: 0.16;
+    }
+    .aurora::after {
+        width: 40rem;
+        height: 40rem;
+        bottom: -20rem;
+        left: -14rem;
+        background: radial-gradient(circle at center, var(--color-nostr-500), transparent 70%);
+        opacity: 0.14;
+    }
+
+    /* THE SIGNATURE — a stay rendered as a passport stamp.
+       Ink border + faint impression ring. Upright content for legibility. */
+    .pt-stamp {
+        position: relative;
+        isolation: isolate;
+        border: 1.5px solid color-mix(in srgb, var(--color-navy-400) 55%, transparent);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .pt-stamp::after {
+        content: '';
+        position: absolute;
+        inset: 5px;
+        border: 1px dashed color-mix(in srgb, var(--color-navy-400) 35%, transparent);
+        border-radius: 8px;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    /* Vertical connector timeline between contiguous stays */
+    .pt-gap-rail {
+        border-left: 2px dotted color-mix(in srgb, var(--color-navy-400) 50%, transparent);
+        margin-left: 0.3rem;
+        padding-left: 0.75rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .pt-stamp {
+            border-color: color-mix(in srgb, var(--color-navy-300) 30%, transparent);
+        }
+        .pt-stamp::after {
+            border-color: color-mix(in srgb, var(--color-navy-300) 18%, transparent);
+        }
+        .pt-gap-rail {
+            border-left-color: color-mix(in srgb, var(--color-navy-300) 30%, transparent);
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------
+   FullCalendar: keep flags-only events, theme the chrome to the palette
+   ------------------------------------------------------------------------- */
+
+/* Show ONLY the country flag as a compact display (unchanged principle) */
 .fc-event,
 .fc-daygrid-event,
 .fc-multimonth-event {
@@ -37,13 +241,129 @@
 .ptr-flag {
     display: inline-block;
     line-height: 1;
-    font-size: 1rem;
+    font-size: 1.05rem;
     padding: 0 1px;
+    filter: saturate(1.05);
 }
 
 @media (min-width: 1024px) {
     .ptr-flag {
-        font-size: 0.875rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Palette theming via FullCalendar's own CSS variables (light) */
+.fc {
+    --fc-border-color: color-mix(in srgb, var(--color-navy-500) 16%, transparent);
+    --fc-page-bg-color: transparent;
+    --fc-neutral-bg-color: color-mix(in srgb, var(--color-navy-500) 6%, transparent);
+    --fc-today-bg-color: color-mix(in srgb, var(--color-gold-400) 14%, transparent);
+    --fc-highlight-color: color-mix(in srgb, var(--color-gold-400) 22%, transparent);
+    font-family: var(--font-sans);
+}
+
+.fc .fc-toolbar-title,
+.fc .fc-multimonth-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-navy-900);
+}
+
+.fc .fc-col-header-cell-cushion {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-navy-500);
+    text-decoration: none;
+}
+
+.fc .fc-daygrid-day-number {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-navy-500);
+    text-decoration: none;
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+    color: var(--color-gold-600);
+    font-weight: 700;
+}
+
+/* Toolbar buttons — ink outline, gold on active/hover */
+.fc .fc-button-primary {
+    background: transparent;
+    border: 1px solid var(--fc-border-color);
+    color: var(--color-navy-600);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: capitalize;
+    padding: 0.4rem 0.7rem;
+    box-shadow: none;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+.fc .fc-button-primary:hover {
+    background: color-mix(in srgb, var(--color-gold-400) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-gold-400) 55%, transparent);
+    color: var(--color-navy-900);
+}
+.fc .fc-button-primary:focus,
+.fc .fc-button-primary:focus-visible {
+    box-shadow: none;
+    outline: 2px solid var(--color-gold-400);
+    outline-offset: 2px;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+    background: var(--color-gold-400);
+    border-color: var(--color-gold-400);
+    color: var(--color-navy-950);
+}
+.fc .fc-button-primary:disabled {
+    background: transparent;
+    border-color: var(--fc-border-color);
+    color: var(--color-navy-300);
+    opacity: 1;
+}
+
+/* Multimonth month cards get a subtle surface */
+.fc .fc-multimonth {
+    border: 0;
+}
+.fc .fc-multimonth-month {
+    padding: 0.35rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .fc {
+        --fc-border-color: rgba(255, 255, 255, 0.09);
+        --fc-neutral-bg-color: rgba(255, 255, 255, 0.03);
+        --fc-today-bg-color: color-mix(in srgb, var(--color-gold-400) 16%, transparent);
+        --fc-highlight-color: color-mix(in srgb, var(--color-gold-400) 20%, transparent);
+    }
+    .fc .fc-toolbar-title,
+    .fc .fc-multimonth-title {
+        color: var(--color-navy-100);
+    }
+    .fc .fc-col-header-cell-cushion {
+        color: var(--color-navy-300);
+    }
+    .fc .fc-daygrid-day-number {
+        color: var(--color-navy-300);
+    }
+    .fc .fc-day-today .fc-daygrid-day-number {
+        color: var(--color-gold-300);
+    }
+    .fc .fc-button-primary {
+        color: var(--color-navy-200);
+    }
+    .fc .fc-button-primary:hover {
+        color: #fff;
+    }
+    .fc .fc-button-primary:disabled {
+        color: var(--color-navy-500);
     }
 }
 

@@ -5,23 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Laravel') }}</title>
+    <title>{{ config('app.name', 'Perpetual Traveler') }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700|space-grotesk:400,500,600,700|space-mono:400,700&display=swap" rel="stylesheet"/>
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-sans antialiased">
-<div class="min-h-screen bg-gray-100 dark:bg-gray-900">
+<div class="min-h-screen bg-navy-50 dark:bg-navy-950">
     <livewire:layout.navigation/>
 
     <!-- Page Heading -->
     @if (isset($header))
-        <header class="bg-white dark:bg-gray-800 shadow">
-            <div class="mx-auto py-2 px-4 sm:px-6 lg:px-8">
+        <header class="border-b border-navy-100 dark:border-white/5 bg-white/70 dark:bg-navy-900/50 backdrop-blur">
+            <div class="mx-auto py-4 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
             </div>
         </header>

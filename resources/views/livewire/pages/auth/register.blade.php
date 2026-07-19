@@ -43,6 +43,16 @@ new #[Layout('layouts.guest')] class extends Component {
 }; ?>
 
 <div>
+    <div class="mb-6">
+        <p class="eyebrow text-gold-600 dark:text-gold-300">Get started</p>
+        <h1 class="mt-2 font-display text-2xl font-bold tracking-tight text-navy-900 dark:text-navy-50">
+            Create your calendar
+        </h1>
+        <p class="mt-2 text-sm text-navy-500 dark:text-navy-300">
+            Pick a username and a password. That&rsquo;s all it takes to start counting days.
+        </p>
+    </div>
+
     <form wire:submit="register">
         <!-- Name -->
         <div>
@@ -83,7 +93,7 @@ new #[Layout('layouts.guest')] class extends Component {
         </div>
 
         <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-            <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 text-center sm:text-left"
+            <a class="text-sm font-medium text-navy-500 dark:text-navy-300 hover:text-navy-900 dark:hover:text-navy-100 rounded-md focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 text-center sm:text-left"
                href="{{ route('login') }}" wire:navigate>
                 {{ __('Already registered?') }}
             </a>
@@ -94,9 +104,10 @@ new #[Layout('layouts.guest')] class extends Component {
         </div>
     </form>
 
-    <div
-        class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out">
-        <a class="underline text-purple-500"
-           href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/register">Onion/Tor</a>
+    <div class="mt-6 pt-5 border-t border-navy-100 dark:border-white/10 text-center">
+        <a class="eyebrow text-navy-400 dark:text-navy-300 hover:text-nostr-500 dark:hover:text-nostr-400 transition"
+           href="http://lws4dd2sd7gbgfzi5npwrzsfipsaamajwj6srmdvhjkwmiygoqm3isqd.onion/register">
+            Prefer Tor? Open the .onion
+        </a>
     </div>
 </div>
