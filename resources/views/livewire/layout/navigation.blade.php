@@ -21,7 +21,7 @@ new class extends Component {
                 <!-- Logo + wordmark -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ url('/calendar') }}" wire:navigate class="flex items-center gap-2.5 group">
-                        <x-application-logo class="block h-8 w-auto"/>
+                        <x-application-logo class="block h-8 w-auto text-navy-900 dark:text-navy-50"/>
                         <span class="hidden sm:flex flex-col leading-none">
                             <span class="font-display text-sm font-bold tracking-tight text-navy-900 dark:text-navy-50">Perpetual Traveler</span>
                             <span class="eyebrow text-[0.625rem] text-navy-400 dark:text-navy-300 mt-0.5">Days &middot; Countries &middot; Stays</span>

@@ -20,7 +20,7 @@
 
     <div class="relative z-10 w-full sm:max-w-md">
         <a href="/" wire:navigate class="flex items-center justify-center gap-3 mb-8 group">
-            <x-application-logo class="h-10 w-auto"/>
+            <x-application-logo class="h-10 w-auto text-navy-900 dark:text-navy-50"/>
             <span class="flex flex-col leading-none">
                 <span class="font-display text-lg font-bold tracking-tight text-navy-900 dark:text-navy-50">Perpetual Traveler</span>
                 <span class="eyebrow text-navy-400 dark:text-navy-300 mt-1">Residency, tracked by the day</span>
