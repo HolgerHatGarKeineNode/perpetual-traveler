@@ -121,7 +121,7 @@ updated([
             </div>
         </div>
     </x-slot>
-    @volt
+    @volt('calendar')
     <div x-data="nostrCal(@this)" class="px-4 sm:px-6 lg:px-8 py-6 max-w-[110rem] mx-auto">
         {{-- Start-date field, framed as a travel document line --}}
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 rounded-xl border border-navy-100 dark:border-white/10 bg-white dark:bg-navy-900 px-4 py-3.5 shadow-sm">

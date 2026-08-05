@@ -9,7 +9,7 @@ test('saveDays returns the newly added day for the current year', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    Volt::test('volt-anonymous-fragment-1ae51b143618c65c5a3bdbd5f853dd62')
+    Volt::test('calendar')
         ->set('currentYear', 2026)
         ->call('saveDays', ['2026-07-10'], 'DE')
         ->assertSet('events', function ($events) {
