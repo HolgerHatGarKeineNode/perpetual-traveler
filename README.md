@@ -54,9 +54,10 @@ php artisan test --no-tia  # plain run, TIA switched off
 
 Notes:
 
-- **Coverage is not enabled system-wide.** `/etc/php/conf.d/xdebug.ini` keeps `xdebug.mode=off`
-  (a system-wide `coverage` mode costs roughly 14x on *every* PHP CLI call on this machine). The
-  `test:tia*` scripts switch it on per run via `XDEBUG_MODE=coverage`.
+- **Coverage should not be enabled system-wide.** Keep `xdebug.mode=off` in your PHP CLI's
+  `xdebug.ini` (`php --ini` shows where it lives). A system-wide `coverage` mode slows down
+  *every* PHP CLI call — measured at roughly 14x on the maintainer's setup. The `test:tia*`
+  scripts switch it on per run via `XDEBUG_MODE=coverage`, which is all TIA needs.
 - Consequence: only `composer test:tia*` can **record** the dependency graph. `composer test`
   replays from an existing graph; without one it prints
   `Running in TIA mode, however TIA as skipped as it needs Needs ext-pcov or Xdebug.` in its **first
