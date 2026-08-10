@@ -377,16 +377,50 @@
 }
 
 .ptr-flag {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     line-height: 1;
     font-size: 1.05rem;
     padding: 0 1px;
+}
+
+/* saturate() used to sit on .ptr-flag; it now targets the emoji alone so it
+   cannot tint the code label (a parent filter is not undoable by a child). */
+.ptr-flag-emoji {
     filter: saturate(1.05);
+}
+
+/* The two-letter ISO code disambiguates look-alike flags at 14px. Mobile day
+   cells are too narrow for it, so it appears from the same 1024px breakpoint
+   the JS uses for the desktop layout (isMobile === max-width: 1023px). */
+.ptr-code {
+    display: none;
 }
 
 @media (min-width: 1024px) {
     .ptr-flag {
         font-size: 0.9rem;
+    }
+
+    .ptr-code {
+        display: inline;
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        /* >=9:1 on the white card, and still 9.0:1 on the gold-tinted
+           today/selection grounds */
+        color: var(--color-navy-600);
+    }
+}
+
+@media (min-width: 1024px) and (prefers-color-scheme: dark) {
+    .ptr-code {
+        /* 9.4:1 on navy-900, 6.3:1 on the gold-tinted selection ground */
+        color: var(--color-navy-200);
     }
 }
 

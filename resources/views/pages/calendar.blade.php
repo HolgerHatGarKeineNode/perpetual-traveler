@@ -33,6 +33,7 @@ $deleteDays = function ($days) {
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
+            'country' => country($event->country)->getIsoAlpha2(),
             'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
             'start' => $event->day,
         ])
@@ -60,6 +61,7 @@ $saveDays = function ($days, $country) {
         ->where('user_id', auth()->id())
         ->get()
         ->map(fn($event) => [
+            'country' => country($event->country)->getIsoAlpha2(),
             'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
             'start' => $event->day,
         ])
@@ -96,6 +98,7 @@ updated([
             ->where('user_id', auth()->id())
             ->get()
             ->map(fn($event) => [
+                'country' => country($event->country)->getIsoAlpha2(),
                 'title' => country($event->country)->getEmoji() . ' ' . country($event->country)->getName(),
                 'start' => $event->day,
             ])

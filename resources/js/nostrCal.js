@@ -20,21 +20,36 @@ export default (livewireComponent) => ({
 
     async init() {
 
-        const events = this.events.map(event => {
-            return {
-                title: event.title,
-                start: event.start,
-                allDay: true
-            }
+        const toFcEvent = (event) => ({
+            title: event.title,
+            start: event.start,
+            allDay: true,
+            country: event.country ?? null,
         });
+
+        const events = this.events.map(toFcEvent);
 
         const that = this;
         const isMobile = window.matchMedia('(max-width: 1023px)').matches;
 
+        // Titles arrive as "<flag emoji> <country name>"; the emoji is two
+        // regional-indicator code points, hence slice(0, 2) on code points.
         const flagOnly = (title) => {
             const chars = Array.from(title || '');
             return chars.slice(0, 2).join('');
         };
+
+        const countryName = (title) => {
+            const rest = Array.from(title || '').slice(2).join('').trim();
+            return rest || (title || '');
+        };
+
+        const esc = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 
         const localISODate = (d) => {
             const date = d instanceof Date ? d : new Date(d);
@@ -50,6 +65,7 @@ export default (livewireComponent) => ({
                 : {left: 'prev,next', center: 'title', right: 'today'},
             eventOverlap: false,
             selectable: true,
+            selectMirror: true,
             unselectAuto: false,
             longPressDelay: 200,
             selectLongPressDelay: 200,
@@ -60,9 +76,22 @@ export default (livewireComponent) => ({
             timeZone: 'local',
             firstDay: 1,
             events: events,
-            eventContent: (arg) => ({
-                html: `<span class="ptr-flag" title="${arg.event.title}">${flagOnly(arg.event.title)}</span>`,
-            }),
+            eventContent: (arg) => {
+                // role="img" + aria-label: the flag emoji alone is the only
+                // visual carrier of the country (WCAG 1.4.1), and `title` is
+                // both hover-only and unreliably announced. The label carries
+                // the plain country name; emoji and code stay decorative so
+                // the country is announced exactly once.
+                const name = countryName(arg.event.title);
+                const code = arg.event.extendedProps.country || '';
+
+                return {
+                    html: `<span class="ptr-flag" role="img" aria-label="${esc(name)}" title="${esc(name)}">`
+                        + `<span class="ptr-flag-emoji" aria-hidden="true">${esc(flagOnly(arg.event.title))}</span>`
+                        + (code ? `<span class="ptr-code" aria-hidden="true">${esc(code)}</span>` : '')
+                        + `</span>`,
+                };
+            },
             select: (info) => {
                 this.newEventStart = info.startStr;
                 this.newEventEnd = info.endStr;
@@ -102,13 +131,7 @@ export default (livewireComponent) => ({
 
         this.$watch('events', (newEvents) => {
             this.calendar.removeAllEvents();
-            this.calendar.addEventSource(newEvents.map(event => {
-                return {
-                    title: event.title,
-                    start: event.start,
-                    allDay: true
-                }
-            }));
+            this.calendar.addEventSource(newEvents.map(toFcEvent));
         });
     },
 
