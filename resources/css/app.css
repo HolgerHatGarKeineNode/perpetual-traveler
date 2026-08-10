@@ -348,6 +348,125 @@
         .faq-a a { color: var(--color-gold-300); }
         .faq-a a:hover { color: var(--color-gold-400); }
     }
+
+    /* =====================================================================
+       THE PROOF IMPRESSION — the docket in the stamping modal.
+       A proof is the trial impression a printer pulls before the run. The
+       stats pane already renders a finished stay as a .pt-stamp with a hero
+       mono day-count; this is the SAME object one step earlier, so the modal
+       and the stats pane show one thing twice rather than two things. No
+       second signature was invented for this phase.
+       Three deliberate restraints:
+         - no risk/ok colour on a country that loses days. A day moving is a
+           normal operation, not an error; painting it --color-risk would be
+           an editorial claim, and red as the only carrier would be 1.4.1
+           anyway. The count and the word carry it.
+         - no motion. The figures are fixed for as long as the modal is open,
+           so there is nothing for an animation to explain.
+         - no new hue. Everything below is the existing navy ramp plus the
+           gold eyebrow the modal already uses.
+       ===================================================================== */
+    .ptr-docket {
+        margin-top: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: 10px;
+        /* Same 4% ink wash as .faq-trigger:hover — the only precedent in this
+           file for "a panel, slightly lifted off the card". Every ratio below
+           is measured against this ground COMPOSITED over the modal surface
+           (#fff light / navy-900 dark), not against the surface itself. */
+        background: color-mix(in srgb, var(--color-navy-500) 4%, transparent);
+        /* Decorative only: the wash already bounds the panel, so this hairline
+           carries no meaning and is not held to 1.4.11. */
+        border: 1px solid color-mix(in srgb, var(--color-navy-500) 14%, transparent);
+    }
+
+    .ptr-line {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.4rem;
+    }
+
+    /* The count. Mono because it is data, bold+dark because it is the point of
+       the line — hierarchy by weight and ink, not by size. */
+    .ptr-line-n {
+        font-family: var(--font-mono);
+        font-size: 0.875rem; /* 14px */
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--color-navy-900); /* 16,25:1 on the composited wash #f7f8fa */
+    }
+
+    .ptr-line-t {
+        font-size: 0.875rem; /* 14px, the modal's own UI size */
+        line-height: 1.45;
+        color: var(--color-navy-700); /* 12,35:1 on #f7f8fa */
+    }
+
+    /* "no country" wears the SAME --ptr-hatch token as the day cells and the
+       legend swatch above the calendar — one texture, now three carriers, so
+       the modal's mark and the grid's marks can never drift apart.
+       align-self centres the box on the line without a pixel nudge, while the
+       digits either side keep a shared baseline.
+       Hatch LINE (a graphical object, 1.4.11 asks 3:1): navy-400 is 4,78:1 on
+       the swatch's own opaque field and 4,50:1 where the wash shows around it.
+       1.125rem, not 1rem: at -45° an 18px box crosses ~3 periods of the 8px
+       hatch, so it still reads as a texture and not as one stripe. */
+    .ptr-hatch-chip {
+        align-self: center;
+        flex: none;
+        display: inline-block;
+        width: 1.125rem;
+        height: 1.125rem;
+        border-radius: 3px;
+        border: 1px solid color-mix(in srgb, var(--color-navy-500) 30%, transparent);
+        background-color: var(--ptr-card);
+        background-image: var(--ptr-hatch);
+    }
+
+    /* before → after. The figure that does not exist yet is the solid one; the
+       one that is already true recedes. Weight (500 vs 700), ink (navy-500 vs
+       navy-900) and one small size step do the work together — size alone
+       would not be enough at 12/15px.
+       There is deliberately no "unchanged" variant when the two figures match:
+       equal numbers still mean data was written (days outside the displayed
+       year are written but not counted here), so "unchanged" would be false.
+       tabular-nums so a row of chips does not jitter. */
+    .ptr-count {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.3rem;
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .ptr-count-was,
+    .ptr-count-arrow {
+        font-size: 0.75rem; /* 12px */
+        font-weight: 500;
+        color: var(--color-navy-500); /* 6,21:1 on the chip, 7,09:1 on its hover ground */
+    }
+    .ptr-count-now {
+        font-size: 0.9375rem; /* 15px */
+        font-weight: 700;
+        color: var(--color-navy-900); /* 14,19:1 on the chip, 16,20:1 on hover */
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .ptr-docket {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        /* Ratios against the composited dark grounds: docket #162139,
+           chip #1b253d, chip hover #252934. */
+        .ptr-line-n { color: var(--color-navy-50); }  /* 14,79:1 */
+        .ptr-line-t { color: var(--color-navy-200); } /*  8,75:1 */
+        .ptr-hatch-chip {
+            border-color: color-mix(in srgb, var(--color-navy-300) 35%, transparent);
+        }
+        .ptr-count-was,
+        .ptr-count-arrow { color: var(--color-navy-300); } /* 5,07:1 chip · 4,83:1 hover */
+        .ptr-count-now { color: var(--color-navy-50); }    /* 14,06:1 · 13,41:1 */
+    }
 }
 
 /* -------------------------------------------------------------------------

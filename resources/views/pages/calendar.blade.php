@@ -125,6 +125,21 @@ $refreshUntrackedDays = protect(function () {
     ];
 });
 
+/*
+ | The "Recently used" chips. Extracted from mount() because P3 puts a NUMBER
+ | on every chip, and that number is a statement about the year on screen:
+ | "Portugal, 148 days in 2026 now, 157 after stamping". A chip list frozen at
+ | mount would carry last year's countries into this year's readout, and a
+ | country the user has just stamped would never get a chip at all — so the one
+ | figure that matters would never appear where the decision is made. The chips
+ | themselves (order, look, behaviour) are untouched; only their input is kept
+ | current. ->values() so the JSON stays an array when the first occurrences of
+ | the codes are not adjacent.
+ */
+$refreshRecentCountries = protect(function () {
+    $this->selectedCountries = collect($this->events)->pluck('country')->unique()->values()->toArray();
+});
+
 $deleteDays = function ($days) {
     $currentYear = $this->currentYear ?? now()->year;
 
@@ -148,6 +163,7 @@ $deleteDays = function ($days) {
         ])
         ->toArray();
 
+    $this->refreshRecentCountries();
     $this->refreshUntrackedDays();
 };
 
@@ -178,6 +194,7 @@ $saveDays = function ($days, $country) {
         ])
         ->toArray();
 
+    $this->refreshRecentCountries();
     $this->refreshUntrackedDays();
 };
 
@@ -198,7 +215,7 @@ mount(function () {
 
     $this->start = auth()->user()->pt_start?->format('Y-m-d');
 
-    $this->selectedCountries = collect($this->events)->pluck('country')->unique()->toArray();
+    $this->refreshRecentCountries();
 
     // After $start, because the lower bound comes from it.
     $this->refreshUntrackedDays();
@@ -220,6 +237,9 @@ updated([
             ])
             ->toArray();
 
+        // The year on screen changed, so every chip's figure now describes a
+        // different year — the chip set has to follow it.
+        $this->refreshRecentCountries();
         $this->refreshUntrackedDays();
     },
     'start' => function () {
@@ -516,20 +536,123 @@ updated([
                          x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                          x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                          class="relative w-full sm:w-[95vw] max-w-screen-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto py-4 px-4 sm:py-6 sm:px-7 bg-white dark:bg-navy-900 border border-navy-100 dark:border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl">
-                        <div class="flex items-center justify-between pb-3 sticky top-0 bg-white dark:bg-navy-900 z-10">
-                            <div>
-                                <p class="eyebrow text-gold-600 dark:text-gold-300 mb-1">Stamp these days</p>
-                                <h3 class="font-display text-lg font-semibold text-navy-900 dark:text-navy-50">Choose country</h3>
-                                <p class="font-mono text-xs text-navy-500 dark:text-navy-300 mt-0.5" x-text="rangeLabel()"></p>
+                        @php
+                            /*
+                             | SERVER-SIDE HALF OF THE PREVIEW. Both figures here are static
+                             | per render — they describe the YEAR, not the selected range, so
+                             | opening the modal needs no roundtrip and the head never reflows
+                             | a moment after the tap.
+                             |
+                             | $ptrYearDays is the same number the stats pane prints as "days
+                             | total": same array ($this->events — note the stats block above
+                             | overwrites its LOCAL $events with the grouping, $this->events is
+                             | untouched), same groupBy, same count, only keyed by ISO code
+                             | instead of by title. Title and code are both derived from the one
+                             | stored country, so the keying is a relabel, not a second
+                             | computation. That is what makes the "before" figure in the modal
+                             | and the figure in the stats tab ONE number rather than two that
+                             | happen to agree. All four queries bound to the calendar year, so
+                             | a count over this array IS the year total — no year filter needed
+                             | here.
+                             |
+                             | $ptrRangeCountries is every country that can possibly show up in
+                             | the docket: a range day inside the displayed year carries a
+                             | country which is, by definition, present in $this->events. So the
+                             | rows can be rendered SERVER-side — like the chips and the A–Z
+                             | list — and Alpine only decides which of them apply to this range.
+                             | Deliberately no x-for/x-if: this modal is teleported to <body>
+                             | and morphed by Livewire, and x-show/x-text/x-cloak are the
+                             | constructs this file already proves survive that.
+                             */
+                            $ptrModalYear = (int) ($currentYear ?? now()->year);
+                            $ptrYearDays = collect($this->events)->groupBy('country')->map->count();
+                            $ptrRangeCountries = $ptrYearDays->keys()
+                                ->map(fn ($code) => ['code' => $code, 'name' => country($code)->getName()])
+                                ->sortBy('name')
+                                ->values();
+                        @endphp
+                        <div class="pb-3 sticky top-0 bg-white dark:bg-navy-900 z-10">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="eyebrow text-gold-600 dark:text-gold-300 mb-1">Stamp these days</p>
+                                    <h3 class="font-display text-lg font-semibold text-navy-900 dark:text-navy-50">Choose country</h3>
+                                    <p class="font-mono text-xs text-navy-500 dark:text-navy-300 mt-0.5" x-text="rangeLabel()"></p>
+                                </div>
+                                <button @click="modalOpen=false"
+                                        aria-label="Close"
+                                        class="flex items-center justify-center w-11 h-11 shrink-0 text-navy-500 dark:text-navy-300 rounded-full hover:text-navy-900 dark:hover:text-navy-100 hover:bg-navy-100/60 dark:hover:bg-white/5 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400">
+                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                         stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
                             </div>
-                            <button @click="modalOpen=false"
-                                    aria-label="Close"
-                                    class="flex items-center justify-center w-11 h-11 text-navy-500 dark:text-navy-300 rounded-full hover:text-navy-900 dark:hover:text-navy-100 hover:bg-navy-100/60 dark:hover:bg-white/5 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400">
-                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                     stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
-                            </button>
+
+                            {{-- THE DOCKET — what these days hold right now, before anything is
+                                 written. Country-INDEPENDENT on purpose: the composition of the
+                                 range is a fact, the same for every choice, and it is the only
+                                 honest place to say that days already belonging to another
+                                 country will move. A per-country "after" figure here would have
+                                 to assume a target that has not been picked yet, and it would
+                                 contradict the chips below — so exactly one arrow exists in this
+                                 modal, and it sits on the chips, where the target is known.
+                                 Inside the sticky head, so the consequence stays on screen while
+                                 the country list scrolls under it. --}}
+                            <div class="ptr-docket" x-show="ptrPreview" x-cloak>
+                                <p class="eyebrow text-gold-600 dark:text-gold-300">On these days now</p>
+
+                                <div class="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
+                                    {{-- Days with no country. Same hatch token as the grid cells,
+                                         so the mark here and the marks there are one source. --}}
+                                    <span class="ptr-line" x-show="ptrFree > 0" x-cloak>
+                                        <span class="ptr-hatch-chip" aria-hidden="true"></span>
+                                        <span class="ptr-line-n" x-text="ptrFree"></span>
+                                        <span class="ptr-line-t"><span
+                                                    x-text="ptrFree === 1 ? 'day has' : 'days have'"></span> no country</span>
+                                    </span>
+
+                                    {{-- Days that belong to a country today. These are the days
+                                         that MOVE, and the year total in brackets is how much is
+                                         at stake for that country. No "after" figure and no risk
+                                         colour: a day moving is a normal operation, and the
+                                         after-figure depends on a choice not yet made. --}}
+                                    @foreach($ptrRangeCountries as $ptrCountry)
+                                        <span class="ptr-line"
+                                              wire:key="dock_{{ $ptrCountry['code'] }}"
+                                              x-show="ptrHeldDays('{{ $ptrCountry['code'] }}') > 0" x-cloak>
+                                            <span class="text-base leading-none shrink-0"
+                                                  aria-hidden="true">{{ country($ptrCountry['code'])->getEmoji() }}</span>
+                                            <span class="ptr-line-n"
+                                                  x-text="ptrHeldDays('{{ $ptrCountry['code'] }}')"></span>
+                                            <span class="ptr-line-t"><span
+                                                        x-text="ptrHeldDays('{{ $ptrCountry['code'] }}') === 1 ? 'day is' : 'days are'"></span>
+                                                {{ $ptrCountry['name'] }}
+                                                <span class="text-navy-500 dark:text-navy-300">({{ $ptrYearDays->get($ptrCountry['code'], 0) }} in {{ $ptrModalYear }})</span>
+                                            </span>
+                                        </span>
+                                    @endforeach
+
+                                    {{-- Days the displayed year cannot speak for. Only reachable
+                                         from the mobile month grid, which renders bleed cells from
+                                         the neighbouring month; the year view does not. Their
+                                         country is genuinely unknown here, so they are neither
+                                         "no country" nor part of any total. --}}
+                                    <span class="ptr-line" x-show="ptrOutside > 0" x-cloak>
+                                        <span class="ptr-line-n" x-text="ptrOutside"></span>
+                                        <span class="ptr-line-t"><span
+                                                    x-text="ptrOutside === 1 ? 'day falls' : 'days fall'"></span>
+                                            outside {{ $ptrModalYear }} &mdash; not in the counts below</span>
+                                    </span>
+                                </div>
+
+                                {{-- The overwrite rule, stated once — and only when something is
+                                     actually at stake, which keeps the head short on the common
+                                     path (stamping days that have no country yet). --}}
+                                <p class="mt-2 text-sm text-navy-600 dark:text-navy-300"
+                                   x-show="ptrHeldTotal > 0" x-cloak>
+                                    Days that already have a country move to the one you pick.
+                                </p>
+                            </div>
                         </div>
                         @php
                             $allCountries = $this->countries->values();
@@ -598,16 +721,43 @@ updated([
                             {{-- Recently used (hidden while searching to keep the field of view clean) --}}
                             @if(count($this->selectedCountries))
                                 <div x-show="!needle" x-cloak>
-                                    <div class="eyebrow text-navy-400 dark:text-navy-300 mt-1">
-                                        Recently used
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mt-1">
+                                        <div class="eyebrow text-navy-400 dark:text-navy-300">
+                                            Recently used
+                                        </div>
+                                        {{-- What the arrow on each chip means, and in which unit.
+                                             One label for the whole row instead of a unit repeated
+                                             on every chip. --}}
+                                        <div class="eyebrow text-navy-400 dark:text-navy-300">
+                                            &rarr; {{ $ptrModalYear }} total
+                                        </div>
                                     </div>
                                     <div class="flex flex-wrap gap-1.5 py-3 border-b border-navy-100 dark:border-white/10">
+                                        {{-- THE ONE ARROW IN THIS MODAL. A chip is a country whose
+                                             year total is already a known quantity, so "before →
+                                             after" says something here. The A–Z list below gets no
+                                             figures on purpose: for the ~245 countries with no days
+                                             in this year the pair would be a constant 0 → n on
+                                             every row, i.e. decoration that fights the one job that
+                                             list has (find a country) — and a badge that is right
+                                             *almost* always is the failure mode this feature exists
+                                             to avoid. The docket above already states n.
+                                             `before` is printed straight from the server; Alpine
+                                             only supplies the predicted figure. --}}
                                         @foreach($this->selectedCountries as $country)
+                                            @php($ptrChipBefore = $ptrYearDays->get($country, 0))
                                             <button type="button"
                                                     @click="setCountry('{{ $country }}')"
+                                                    :aria-label="ptrChipLabel('{{ $country }}', @js(country($country)->getName()), {{ $ptrChipBefore }})"
                                                     wire:key="c_{{ $country }}"
-                                                    class="inline-flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-navy-900 dark:text-navy-100 bg-navy-100/70 dark:bg-white/5 border border-transparent hover:border-gold-400 hover:bg-gold-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 transition-colors rounded-lg min-h-[44px]">
+                                                    class="inline-flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer text-navy-900 dark:text-navy-100 bg-navy-100/70 dark:bg-white/5 border border-transparent hover:border-gold-400 hover:bg-gold-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 transition-colors rounded-lg min-h-[44px]">
                                                 {{ country($country)->getEmoji() . ' ' . country($country)->getName() }}
+                                                <span class="ptr-count" aria-hidden="true">
+                                                    <span class="ptr-count-was">{{ $ptrChipBefore }}</span>
+                                                    <span class="ptr-count-arrow">&rarr;</span>
+                                                    <span class="ptr-count-now"
+                                                          x-text="ptrAfter('{{ $country }}', {{ $ptrChipBefore }})"></span>
+                                                </span>
                                             </button>
                                         @endforeach
                                     </div>
