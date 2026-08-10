@@ -276,7 +276,12 @@ updated([
                                                 @if(!$loop->last)
                                                     <li class="pt-gap-rail py-1.5 my-1">
                                                         @php
-                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])->diffInDays(\Illuminate\Support\Carbon::parse($stay['bis'])) - 1;
+                                                            // Carbon 3 gibt diffInDays() vorzeichenbehaftet zurueck (Carbon 2:
+                                                            // absolut). Die Richtung muss deshalb stimmen: vom letzten Tag
+                                                            // dieses Aufenthalts zum ersten des naechsten. Kein abs() --
+                                                            // eine negative Zahl waere ein echter Sortierfehler und soll
+                                                            // sichtbar bleiben, statt still plausibel zu werden.
+                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($stay['bis'])->diffInDays(\Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])) - 1;
                                                         @endphp
                                                         <span class="font-mono text-xs font-medium @if($daysInBetween < 21) text-risk dark:text-risk-bright @else text-ok dark:text-ok-bright @endif">
                                                             {{ $daysInBetween }} days gap{{ $daysInBetween < 21 ? ' · tight' : '' }}
