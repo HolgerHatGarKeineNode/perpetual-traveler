@@ -18,6 +18,13 @@ export default (livewireComponent) => ({
 
     currentYear: livewireComponent.entangle('currentYear').live,
 
+    // The exact list of days inside the checked window that carry no country,
+    // computed server-side (calendar.blade.php -> refreshUntrackedDays) and
+    // shipped whole. This file does NO date arithmetic on it: it hatches set
+    // members, nothing else. That is what keeps the number printed above the
+    // calendar and the marked cells in step — they read the same list.
+    untrackedDays: livewireComponent.entangle('untrackedDays'),
+
     async init() {
 
         const toFcEvent = (event) => ({
@@ -57,6 +64,18 @@ export default (livewireComponent) => ({
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
         };
 
+        // Set lookup, rebuilt whenever the server ships a new list. The factory
+        // exists so the option and its later replacement share ONE body but get
+        // separate function identities (see the $watch below).
+        let untracked = new Set(this.untrackedDays ?? []);
+        const makeDayCellClassNames = () => (arg) => (
+            // arg.date is dateEnv.toDate(), i.e. a Date in the calendar's
+            // timeZone ('local'), so localISODate is the same path every other
+            // date in this file takes. A day off here would be a day off in the
+            // year total.
+            untracked.has(localISODate(arg.date)) ? ['ptr-untracked'] : []
+        );
+
         this.calendar = new Calendar(this.$refs.cal, {
             plugins: [interactionPlugin, multiMonthPlugin, dayGridPlugin],
             initialView: isMobile ? 'dayGridMonth' : 'multiMonthYear',
@@ -76,6 +95,7 @@ export default (livewireComponent) => ({
             timeZone: 'local',
             firstDay: 1,
             events: events,
+            dayCellClassNames: makeDayCellClassNames(),
             eventContent: (arg) => {
                 // role="img" + aria-label: the flag emoji alone is the only
                 // visual carrier of the country (WCAG 1.4.1), and `title` is
@@ -132,6 +152,15 @@ export default (livewireComponent) => ({
         this.$watch('events', (newEvents) => {
             this.calendar.removeAllEvents();
             this.calendar.addEventSource(newEvents.map(toFcEvent));
+        });
+
+        this.$watch('untrackedDays', (days) => {
+            untracked = new Set(days ?? []);
+            // dayCellClassNames only runs again when FullCalendar sees the
+            // option change (SET_OPTION -> re-render of the day cells). The set
+            // is captured by reference, so a fresh closure identity is what
+            // makes the dispatch happen at all.
+            this.calendar && this.calendar.setOption('dayCellClassNames', makeDayCellClassNames());
         });
     },
 

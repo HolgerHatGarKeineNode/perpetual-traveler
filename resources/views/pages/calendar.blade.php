@@ -1,12 +1,13 @@
 <?php
 
 use function Laravel\Folio\{middleware};
-use function Livewire\Volt\{computed, state, mount, updated, rules};
+use function Livewire\Volt\{computed, state, mount, protect, updated, rules};
 use App\Models\Event;
+use Carbon\CarbonImmutable;
 
 middleware(['auth']);
 
-state(['events', 'currentYear', 'start', 'selectedCountries']);
+state(['events', 'currentYear', 'start', 'selectedCountries', 'untrackedDays', 'untrackedWindow']);
 
 rules([
     'start' => 'required|date',
@@ -14,6 +15,114 @@ rules([
 
 $countries = computed(function () {
     return collect(countries())->sortBy('name');
+});
+
+/*
+ | A missing day is not "zero days in a country" — it is UNKNOWN, and it drags
+ | the year total down without saying so. This builds the one list of those
+ | days for the year in view. It is the SINGLE source for both carriers: the
+ | strip above the calendar prints count($untrackedDays), and the grid hatches
+ | exactly the members of $untrackedDays (nostrCal.js -> dayCellClassNames does
+ | set lookups only, no date arithmetic of its own). Two separate computations
+ | could drift apart; one list cannot.
+ |
+ | Also the only server-side piece here, which is the point: a Pest test can
+ | pin the number. Client-side it would be unverifiable in this repo (no
+ | Vitest, no Playwright, no CI).
+ */
+$refreshUntrackedDays = protect(function () {
+    // $currentYear is a public Livewire property, so the client sets it. Clamped
+    // so CarbonImmutable::create() can never be handed a year PHP's DateTime
+    // refuses. The day loop further down needs no separate guard: both of its
+    // bounds are clamped INTO this year, so it cannot run more than 366 times
+    // however old the start date is.
+    $year = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
+
+    /*
+     | LOWER BOUND — the perpetual-traveler start date. From that day on, days
+     | count towards residency, so from that day on a blank day is a real hole
+     | in the record. Earlier days are "counted apart" (the field says so
+     | itself), so their absence is not a hole in the residency record.
+     |
+     | No start date set: there is no lower bound, so nothing is marked and the
+     | strip asks for the date instead. Falling back to "first tracked day"
+     | was rejected — it would make the marked range depend on the very data
+     | it criticises: adding a single day in January would conjure weeks of
+     | fresh hatching out of nowhere. A signal whose extent moves with the
+     | data it judges is not a measurement.
+     */
+    // blank() first, because CarbonImmutable::parse('') quietly returns NOW --
+    // an empty field would otherwise mark a window it never had. That branch is
+    // reachable: clearing the date input sends ''.
+    // rescue() second, and it is defence in depth, NOT load-bearing today: an
+    // unparseable $start already throws one frame earlier, in the pre-existing
+    // updated('start') hook (Carbon::parse there, HEAD line 109, untouched by
+    // this phase). Kept so that hardening that hook cannot silently turn this
+    // function into the next crash site.
+    $startDay = blank($this->start)
+        ? null
+        : rescue(fn () => CarbonImmutable::parse($this->start)->startOfDay(), null, false);
+
+    // $untrackedWindow is the view's ONLY input for this strip, so that the
+    // template re-derives nothing and cannot drift from what was computed here:
+    //   null                          -> no usable start date at all
+    //   ['start' => …, 'from' => null] -> start usable, but this year has no
+    //                                     checkable window (wholly before the
+    //                                     start date, or wholly ahead)
+    //   ['start','from','to']         -> the checked window
+    if (! $startDay) {
+        $this->untrackedDays = [];
+        $this->untrackedWindow = null;
+
+        return;
+    }
+
+    $from = $startDay->max(CarbonImmutable::create($year, 1, 1)->startOfDay());
+
+    /*
+     | UPPER BOUND — the last day that is OVER. A day still running cannot be a
+     | gap yet: you have not "been" anywhere for a day that has not finished.
+     | That is why it is yesterday and not today, and it has a second, welcome
+     | consequence: the app stores no per-user timezone and runs on UTC
+     | (config/app.php), while the calendar renders in the browser's local
+     | timezone. A client's local date is never earlier than UTC's date minus
+     | one, so an upper bound of "UTC yesterday" can never reach into a day the
+     | browser still considers the future — the failure this phase exists to
+     | avoid. Anchoring on today would put one future cell under the hatch for
+     | every user west of UTC, for part of every day.
+     | For a year that is already over, 31 Dec is the earlier bound.
+     */
+    $to = CarbonImmutable::create($year, 12, 31)->startOfDay()
+        ->min(CarbonImmutable::today()->subDay());
+
+    if ($from->greaterThan($to)) {
+        // The year lies wholly before the start date, or wholly in the future.
+        $this->untrackedDays = [];
+        $this->untrackedWindow = ['start' => $startDay->format('Y-m-d'), 'from' => null, 'to' => null];
+
+        return;
+    }
+
+    $tracked = collect($this->events)
+        ->map(fn ($event) => CarbonImmutable::parse($event['start'])->format('Y-m-d'))
+        ->flip();
+
+    $untracked = [];
+
+    for ($day = $from; $day->lessThanOrEqualTo($to); $day = $day->addDay()) {
+        $key = $day->format('Y-m-d');
+
+        if (! $tracked->has($key)) {
+            $untracked[] = $key;
+        }
+    }
+
+    $this->untrackedDays = $untracked;
+    $this->untrackedWindow = [
+        'start' => $startDay->format('Y-m-d'),
+        'from' => $from->format('Y-m-d'),
+        'to' => $to->format('Y-m-d'),
+    ];
 });
 
 $deleteDays = function ($days) {
@@ -38,6 +147,8 @@ $deleteDays = function ($days) {
             'start' => $event->day,
         ])
         ->toArray();
+
+    $this->refreshUntrackedDays();
 };
 
 $saveDays = function ($days, $country) {
@@ -66,6 +177,8 @@ $saveDays = function ($days, $country) {
             'start' => $event->day,
         ])
         ->toArray();
+
+    $this->refreshUntrackedDays();
 };
 
 mount(function () {
@@ -86,6 +199,9 @@ mount(function () {
     $this->start = auth()->user()->pt_start?->format('Y-m-d');
 
     $this->selectedCountries = collect($this->events)->pluck('country')->unique()->toArray();
+
+    // After $start, because the lower bound comes from it.
+    $this->refreshUntrackedDays();
 });
 
 updated([
@@ -103,11 +219,16 @@ updated([
                 'start' => $event->day,
             ])
             ->toArray();
+
+        $this->refreshUntrackedDays();
     },
     'start' => function () {
         $user = auth()->user();
         $user->pt_start = \Illuminate\Support\Carbon::parse($this->start)->startOfDay();
         $user->save();
+
+        // The lower bound just moved.
+        $this->refreshUntrackedDays();
     },
 ]);
 
@@ -138,6 +259,7 @@ updated([
             </div>
             <input
                     id="start"
+                    x-ref="startField"
                     type="date"
                     class="block w-full sm:w-auto rounded-lg border-navy-200 dark:border-white/10 bg-white dark:bg-navy-950/60 text-navy-900 dark:text-navy-100 shadow-sm focus:border-gold-400 focus:ring-2 focus:ring-gold-400/40 text-base sm:text-sm px-3.5 py-2.5 [color-scheme:light] dark:[color-scheme:dark]"
                     wire:model.live.debounce="start"/>
@@ -160,12 +282,83 @@ updated([
         <div class="bg-white dark:bg-navy-900 overflow-hidden border border-navy-100 dark:border-white/10 shadow-sm rounded-2xl">
             <div class="p-3 sm:p-6 text-navy-900 dark:text-navy-100">
                 <div class="lg:flex lg:space-x-6">
-                    {{-- Calendar pane --}}
-                    <div wire:ignore
-                         x-show="tab === 'calendar'"
-                         x-cloak
-                         class="w-full lg:w-8/12 xl:w-9/12 lg:!block"
-                         x-ref="cal"></div>
+                    {{-- Calendar column: the year's data-quality line, then the grid --}}
+                    <div class="w-full lg:w-8/12 xl:w-9/12">
+                        @php
+                            $ptrYear = (int) ($currentYear ?? now()->year);
+                            $ptrGaps = count($untrackedDays ?? []);
+                            // Every date below comes normalised out of
+                            // refreshUntrackedDays(); nothing is re-derived here.
+                            $ptrFrom = data_get($untrackedWindow, 'from');
+                            $ptrTo = data_get($untrackedWindow, 'to');
+                            $ptrStart = data_get($untrackedWindow, 'start');
+                            $ptrDate = fn ($iso) => \Carbon\CarbonImmutable::parse($iso)->format('d.m.Y');
+                        @endphp
+
+                        {{-- Untracked-days line. Sits above FullCalendar's own toolbar, so the
+                             pane reads summary -> navigation -> grid. This sentence is also the
+                             accessible carrier of the hatch marking: the texture in the grid is a
+                             visual index into it. (FullCalendar owns the cell DOM, so a per-cell
+                             hidden label would mean mount/unmount bookkeeping inside foreign
+                             nodes — deliberately left out of this phase, and named as such.)
+                             The count is count($untrackedDays), i.e. the same list the grid
+                             hatches — never a second calculation. --}}
+                        <div x-show="tab === 'calendar'"
+                             x-cloak
+                             class="lg:!block pb-3 mb-4 border-b border-navy-100 dark:border-white/10">
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                                @if(! $ptrStart)
+                                    <div class="flex-1 min-w-[14rem]">
+                                        <p class="eyebrow text-navy-400 dark:text-navy-300">Untracked days</p>
+                                        <p class="mt-1 text-sm text-navy-500 dark:text-navy-300">
+                                            Set your start date, and every day since then that has no
+                                            country gets marked in the grid.
+                                        </p>
+                                    </div>
+                                    <button type="button"
+                                            @click="$refs.startField?.focus()"
+                                            class="inline-flex items-center justify-center px-3 py-2 min-h-[44px] text-sm font-semibold rounded-lg border border-navy-200 dark:border-white/10 text-navy-900 dark:text-navy-100 hover:border-gold-400 hover:bg-gold-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400 transition-colors whitespace-nowrap">
+                                        Set start date
+                                    </button>
+                                @elseif(! $ptrFrom)
+                                    <div>
+                                        <p class="eyebrow text-navy-400 dark:text-navy-300">Untracked &middot; {{ $ptrYear }}</p>
+                                        <p class="mt-1 text-sm text-navy-500 dark:text-navy-300">
+                                            Nothing to check in {{ $ptrYear }} yet. Days are checked from
+                                            your start date ({{ $ptrDate($ptrStart) }}) up to the last
+                                            day that is over.
+                                        </p>
+                                    </div>
+                                @elseif($ptrGaps === 0)
+                                    <div>
+                                        <p class="eyebrow text-navy-400 dark:text-navy-300">Untracked &middot; {{ $ptrYear }}</p>
+                                        <p class="mt-1 text-sm text-navy-500 dark:text-navy-300">
+                                            Every day from {{ $ptrDate($ptrFrom) }} to {{ $ptrDate($ptrTo) }}
+                                            has a country.
+                                        </p>
+                                    </div>
+                                @else
+                                    <span class="ptr-untracked-swatch shrink-0" aria-hidden="true"></span>
+                                    <div>
+                                        <p class="eyebrow text-navy-400 dark:text-navy-300">Untracked &middot; {{ $ptrYear }}</p>
+                                        <p class="mt-1 text-sm text-navy-700 dark:text-navy-200">
+                                            <span class="font-mono text-base font-bold text-navy-900 dark:text-navy-50">{{ $ptrGaps }}</span>
+                                            {{ $ptrGaps === 1 ? 'day has' : 'days have' }} no country —
+                                            hatched in the grid,
+                                            <span class="whitespace-nowrap">{{ $ptrDate($ptrFrom) }} – {{ $ptrDate($ptrTo) }}</span>.
+                                            Days still to come are not gaps.
+                                        </p>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div wire:ignore
+                             x-show="tab === 'calendar'"
+                             x-cloak
+                             class="lg:!block"
+                             x-ref="cal"></div>
+                    </div>
 
                     {{-- Stats pane --}}
                     <div x-show="tab === 'stats'"

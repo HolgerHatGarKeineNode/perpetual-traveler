@@ -354,6 +354,46 @@
    FullCalendar: keep flags-only events, theme the chrome to the palette
    ------------------------------------------------------------------------- */
 
+/* THE ENGRAVING — one texture, two carriers.
+   A tracked day wears a stamp (the flag). A day we know nothing about wears
+   the fine diagonal guilloche of an unstamped passport page. Defined once as
+   a token so the legend swatch above the calendar and the day cells in the
+   grid can never drift apart visually.
+   Why a texture and not a fill: colour must never be the sole carrier
+   (WCAG 1.4.1), a grey wash would read as "disabled" instead of "unknown",
+   and the edge/ring channel is already spoken for by the date selection
+   below — two meanings on one shape would be a lie.
+   Geometry: 2px line every 8px = 25% area coverage. The LINE is loud enough
+   to qualify as a graphical object (>=3,89:1 on every ground a cell can
+   take, see below); the FIELD only shifts the cell by ~1,2:1 light / ~1,4:1
+   dark, i.e. about as much as a grid line — so it never competes with the
+   flags in the neighbouring cells. 2px (not 1px) because a hairline at 45
+   degrees is smeared by antialiasing, and a measured contrast has to survive
+   what the rasteriser does to it. */
+:root {
+    --ptr-hatch: repeating-linear-gradient(
+        -45deg,
+        var(--color-navy-400) 0 2px,
+        transparent 2px 8px
+    );
+    /* The surface the calendar sits on (calendar.blade.php:160 — the card is
+       `bg-white dark:bg-navy-900`). Named instead of inlined because the
+       cleared date field below has to match it EXACTLY; if the card ever
+       changes colour, this is the single place that has to follow. */
+    --ptr-card: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ptr-hatch: repeating-linear-gradient(
+            -45deg,
+            var(--color-navy-200) 0 2px,
+            transparent 2px 8px
+        );
+        --ptr-card: var(--color-navy-900);
+    }
+}
+
 /* Show ONLY the country flag as a compact display (unchanged principle) */
 .fc-event,
 .fc-daygrid-event,
@@ -463,6 +503,109 @@
     font-weight: 700;
 }
 
+/* =========================================================================
+   THREE CELL STATES, THREE CHANNELS — so they compose instead of fighting.
+     today       -> FILL      (--fc-today-bg-color, gold at 14%/16%)
+                    + the day number turns gold & bold (a second channel)
+     untracked   -> TEXTURE   (the guilloche, td background-IMAGE)
+     selected    -> EDGE      (inset rails on the .fc-highlight overlay)
+   Because no two states want the same channel, "today AND untracked AND
+   being selected" stays readable, and every combination was measured (see
+   the ratios on each rule). Paint order is bottom-up: today's tint, the
+   engraving over it, the selection wash and rails over both, then the day
+   number (z-index 4) and the flags (z-index 6) on top.
+   ========================================================================= */
+
+/* Untracked: a day inside the checked window that carries no country.
+   Only background-image, so today's background-COLOR still shows through
+   the gaps of the hatch. Specificity 0,3,0 deliberately beats FullCalendar's
+   own `.fc .fc-day-disabled { background: ... }` shorthand (0,2,0), which
+   would otherwise reset the image if a validRange were ever introduced.
+   Ink contrast (opaque, so measured == computed):
+     light  navy-400 -> 4,78:1 plain · 4,39:1 on today · 4,17:1 selected
+                        · 3,89:1 selected+today
+     dark   navy-200 -> 9,44:1 plain · 6,94:1 on today · 6,32:1 selected
+                        · 4,58:1 selected+today
+   All >= 3:1 (WCAG 1.4.11). navy-300 was the quieter first choice and was
+   dropped: it falls to 2,45:1 (light) / 2,79:1 (dark) once a cell is both
+   today and selected — exactly the cell a user looks at most. */
+.fc .fc-daygrid-day.ptr-untracked {
+    background-image: var(--ptr-hatch);
+}
+
+/* THE CLEARED DATE FIELD — repair of a real defect, found in the browser.
+   The engraving ran straight through the day numbers. Line-against-ground was
+   measured and holds (4,78:1, so the marker is visible); digit-against-LINE
+   was never measured, and it is 1,58:1 light / 1,64:1 dark. Where a line
+   crosses a digit the type is, at that spot, not set off at all — WCAG 1.4.3
+   asks 4,5:1 for text, and at 25% coverage every digit is crossed several
+   times. The earlier claim "about as quiet as a grid line" was true of the
+   FIELD and false of the GLYPH: on the glyph the line is not ground, it is
+   foreground over foreground.
+   The repair keeps ink off the type instead of piling ink on top of it: the
+   date row becomes an opaque cleared field — the pre-printed date box of a
+   visa form — and the guilloche fills the body of the day below it.
+   Why this element carries it:
+     - its height IS FullCalendar's own layout, so the field is never a pixel
+       guess: font metrics, line-height and the much wider
+       `fc-daygrid-month-start` label are covered automatically;
+     - `.fc-daygrid-day-top` is unpositioned, so it paints ABOVE the td
+       background (the engraving) and BELOW `.fc-highlight` (z-index 3). The
+       selection wash therefore still runs across the cleared field, and a
+       selected untracked day keeps one continuous gold wash instead of a hole;
+     - opaque is safe here for one specific reason: a hatched cell can never be
+       today. The window ends at the last day that is OVER, so `.ptr-untracked`
+       and `.fc-day-today` are mutually exclusive and the field has exactly ONE
+       ground to match — the card.
+   Digit against the ground it now actually sits on:
+     light  navy-500 -> 7,56:1 on the field · 6,59:1 with the wash over it
+     dark   navy-300 -> 5,75:1 on the field · 3,85:1 with the wash over it
+                        (that last one is the day number on the SELECTION, a
+                        pre-existing shortfall identical on unhatched cells —
+                        reported, not silently patched here)
+   The engraving stays unambiguous: 4,78:1 plain / 4,17:1 under the wash in
+   light, 9,44:1 / 6,32:1 in dark, against 3:1 required by 1.4.11. */
+.fc .fc-daygrid-day.ptr-untracked .fc-daygrid-day-top {
+    background-color: var(--ptr-card);
+}
+
+/* Date selection during the drag — the die of the stamp about to be pressed.
+   A wash cannot carry this state: gold-400 at 22% over the white card is
+   1,15:1 against the neighbouring cell (dark: 1,49:1), and even a fully
+   OPAQUE gold-400/gold-500 fill only reaches 1,89:1 / 2,50:1. WCAG 1.4.11
+   asks 3:1 for a graphical object needed to understand the state, and here
+   the highlight is the ONLY feedback while dragging (selectMirror is inert in
+   this build — no timegrid plugin, so daygrid's getMirrorSegs() returns []).
+   So the state moves to an edge, where opaque ink can do the work:
+     gold-600 -> 5,35:1 plain · 4,91:1 on today · 4,67:1 on the wash
+                 · 4,36:1 on today+wash
+   FullCalendar renders ONE .fc-highlight per week row (a bg-harness spanning
+   the selected columns), so a selection across several weeks is a stack of
+   boxes. Hence asymmetric rails: 2px left/right mark the horizontal extent
+   (which days), 1px top/bottom keep the week divisions subordinate, so the
+   stack reads as one column with week seams instead of a chain of separate
+   crates. No border-radius: flush edges are what makes consecutive rows
+   merge. No transition either — anything animated lags behind the pointer. */
+.fc .fc-highlight {
+    box-shadow:
+        inset 2px 0 0 0 var(--color-gold-600),
+        inset -2px 0 0 0 var(--color-gold-600),
+        inset 0 1px 0 0 var(--color-gold-600),
+        inset 0 -1px 0 0 var(--color-gold-600);
+}
+
+/* Legend swatch above the calendar. Same --ptr-hatch token as the cells, so
+   the key and the marks are one source. */
+.ptr-untracked-swatch {
+    display: block;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-navy-500) 30%, transparent);
+    background-color: #fff;
+    background-image: var(--ptr-hatch);
+}
+
 /* Toolbar buttons — ink outline, gold on active/hover */
 .fc .fc-button-primary {
     background: transparent;
@@ -527,6 +670,22 @@
     }
     .fc .fc-day-today .fc-daygrid-day-number {
         color: var(--color-gold-300);
+    }
+    /* The dark override for the selection rails is NOT cosmetic: gold-600 on
+       navy-900 is only 3,23:1 and drops to 2,37:1 on the today tint / 1,57:1
+       on today+wash — it would FAIL 1.4.11 on exactly the cell that matters.
+       gold-400 gives 9,14:1 plain · 6,72:1 on today · 6,12:1 on the wash
+       · 4,44:1 on today+wash. */
+    .fc .fc-highlight {
+        box-shadow:
+            inset 2px 0 0 0 var(--color-gold-400),
+            inset -2px 0 0 0 var(--color-gold-400),
+            inset 0 1px 0 0 var(--color-gold-400),
+            inset 0 -1px 0 0 var(--color-gold-400);
+    }
+    .ptr-untracked-swatch {
+        border-color: color-mix(in srgb, var(--color-navy-300) 35%, transparent);
+        background-color: var(--color-navy-900);
     }
     .fc .fc-button-primary {
         color: var(--color-navy-200);
