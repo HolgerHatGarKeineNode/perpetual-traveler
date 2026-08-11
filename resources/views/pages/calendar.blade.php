@@ -3,6 +3,7 @@
 use function Laravel\Folio\{middleware};
 use function Livewire\Volt\{computed, state, mount, protect, updated, rules};
 use App\Models\Event;
+use App\Support\ContiguousStays;
 use Carbon\CarbonImmutable;
 
 middleware(['auth']);
@@ -15,6 +16,76 @@ rules([
 
 $countries = computed(function () {
     return collect(countries())->sortBy('name');
+});
+
+/*
+ | THE ONE DERIVATION ON THIS PAGE THAT IS NOT BOUND TO THE YEAR ON SCREEN.
+ |
+ | A contiguous stay is a fact about the user's history: 28.12.2025-05.01.2026 is
+ | nine days whichever year you look at it from. Every other figure here IS a
+ | statement about the calendar year (days total, the PT split, the modal chips,
+ | the untracked days) and stays year-bound — for residency, days are counted per
+ | year. Both live side by side on purpose; the run carries a line naming its
+ | share of the year so the two numbers cannot read as a contradiction.
+ |
+ | WHY computed() AND NOT A state() PROPERTY: $events is entangled with Alpine,
+ | so anything put in state() is serialised to the client on every request. The
+ | calendar grid needs the displayed year and nothing else, while this needs the
+ | whole history — one row per day, ~11 000 rows for 30 years. computed() keeps
+ | it server-side and memoises it for the request.
+ |
+ | WHY THE WHOLE HISTORY AND NOT A WALK OUTWARDS FROM THE YEAR EDGES: measured,
+ | not assumed. Fixture of one row per day, five countries, stays of ~18 days;
+ | medians of 5-7 renders on SQLite, base commit 11bc357 measured with the same
+ | probe:
+ |
+ |   1 826 rows (5 years)   render 22,6 -> 25,9 ms   query+map+derive  1,9 ms
+ |  10 958 rows (30 years)  render 26,4 -> 53,8 ms   query+map+derive 13-23 ms
+ |
+ | 30 years of UNBROKEN daily records is the ceiling of this data model, and it
+ | costs ~27 ms once per render. The narrower variant cannot do better than
+ | linear in the worst case anyway — a run may be 30 years long, and its full
+ | length is exactly what has to be printed — so it would buy milliseconds in the
+ | common case for a second notion of "adjacent" that can disagree with this one.
+ | That disagreement is the bug this phase is fixing.
+ |
+ | toBase(): the rows are two scalars each and are thrown away immediately, so
+ | Eloquent hydration is pure overhead — 145,7 ms against 13,4 ms at 10 958 rows,
+ | same run.
+ |
+ | The country title is memoised per ISO code, because country() reads the rinvex
+ | dataset: once per DAY instead of once per COUNTRY costs 105,8 ms against
+ | 13,4 ms at the same size.
+ */
+$contiguousStays = computed(function () {
+    // $currentYear is a public Livewire property, so the client sets it. Clamped
+    // exactly like refreshUntrackedDays() above, so that the seam line, the day
+    // share it prints and that function all speak about ONE year.
+    // No longer load-bearing against a crash, and the comment says so rather
+    // than implying it: ContiguousStays does integer calendar arithmetic and has
+    // no year PHP's DateTime would refuse. It WAS load-bearing while the year
+    // bounds went through a date object — the pre-existing "absurd
+    // client-supplied year" test drives -5 through here, and DateTimeImmutable
+    // rejected '-005-01-01' with "Double timezone specification".
+    $year = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
+    $titles = [];
+
+    // ->get()->map() and not ->cursor() with a generator: the lazy variant saves
+    // ~8 MB of peak process memory (110 -> 102 MB in the probe) but costs ~11 ms
+    // in query+map+derive at 10 958 rows (27,7 -> 39,2 ms measured), and the peak
+    // is not what hurts here.
+    $days = Event::query()
+        ->where('user_id', auth()->id())
+        ->orderBy('day')
+        ->toBase()
+        ->get(['day', 'country'])
+        ->map(function ($row) use (&$titles) {
+            $titles[$row->country] ??= country($row->country)->getEmoji() . ' ' . country($row->country)->getName();
+
+            return ['title' => $titles[$row->country], 'day' => $row->day];
+        });
+
+    return ContiguousStays::intersectingYear($days, $year);
 });
 
 /*
@@ -391,32 +462,27 @@ updated([
                             </div>
                             <dl class="space-y-3 w-full">
                                 @php
-                                    // Sorting the events by date
-                                    usort($events, function($a, $b) {
-                                    return strtotime($a['start']) - strtotime($b['start']);
-                                    });
-                                    // Merging events of the same country and segregating into contiguous stays
-                                    $contiguousStays = [];
-                                    $currentTitle = null;
-                                    $anzahlTage = 0;
-                                    $von = null;
-                                    $bis = null;
-                                    foreach ($events as $i => $item) {
-                                        if ($currentTitle !== $item['title'] || strtotime($item['start']) - strtotime($events[$i-1]['start']) > 86400) {
-                                            if($currentTitle){
-                                                $contiguousStays[$currentTitle][] = ['anzahlTage' => $anzahlTage, 'von' => $von, 'bis' => $bis];
-                                            }
-                                            $currentTitle = $item['title'];
-                                            $anzahlTage = 1;
-                                            $von = $item['start'];
-                                        } else {
-                                            $anzahlTage++;
-                                        }
-                                        $bis = $item['start'];
-                                    }
-                                    if($currentTitle){
-                                        $contiguousStays[$currentTitle][] = ['anzahlTage' => $anzahlTage, 'von' => $von, 'bis' => $bis];
-                                    }
+                                    /*
+                                     | The run detection that used to sit here ran on the
+                                     | year-bound $events and therefore halved every stay across
+                                     | New Year. It now lives in App\Support\ContiguousStays,
+                                     | fed with the whole history by the $contiguousStays computed
+                                     | property above — see the comment there for why the runs are
+                                     | history-wide while everything below stays year-bound.
+                                     | $ptrStays is keyed by the same title as the cards, because
+                                     | both titles come from the one stored country code.
+                                     |
+                                     | The date sort stays: it is what puts the country cards in
+                                     | the order of their first stamped day (groupBy keeps first
+                                     | appearance), which is a separate job from run detection.
+                                     */
+                                    usort($events, fn ($a, $b) => strcmp($a['start'], $b['start']));
+                                    $ptrStays = $this->contiguousStays;
+                                    // Same clamp as the computed property, because the seam line
+                                    // prints this year NEXT TO the day share computed for it —
+                                    // printing an unclamped year there would label the figure with
+                                    // a year it was not counted for.
+                                    $ptrStayYear = max(1970, min(9999, (int) ($currentYear ?? now()->year)));
                                     $events = collect($events)
                                         ->groupBy('title')
                                         ->map(function($event) use($start) {
@@ -478,13 +544,31 @@ updated([
                                             Contiguous stays
                                         </dt>
                                         <ol role="list" class="mt-2">
-                                            @foreach($contiguousStays[$c] as $key => $stay)
-                                                <li class="flex items-baseline justify-between gap-2">
-                                                    <span class="font-mono text-sm font-bold text-navy-900 dark:text-navy-50">{{ $stay['anzahlTage'] }}d</span>
-                                                    <time class="font-mono text-xs text-navy-500 dark:text-navy-300">
-                                                        {{ \Illuminate\Support\Carbon::parse($stay['von'])->format('d.m.Y') }}
-                                                        &rarr; {{ \Illuminate\Support\Carbon::parse($stay['bis'])->format('d.m.Y') }}
-                                                    </time>
+                                            @foreach($ptrStays[$c] ?? [] as $key => $stay)
+                                                <li>
+                                                    <div class="flex items-baseline justify-between gap-2">
+                                                        <span class="font-mono text-sm font-bold text-navy-900 dark:text-navy-50">{{ $stay['days'] }}d</span>
+                                                        <time class="font-mono text-xs text-navy-500 dark:text-navy-300">
+                                                            {{ \Illuminate\Support\Carbon::parse($stay['from'])->format('d.m.Y') }}
+                                                            &rarr; {{ \Illuminate\Support\Carbon::parse($stay['to'])->format('d.m.Y') }}
+                                                        </time>
+                                                    </div>
+                                                    {{-- THE YEAR SEAM. A run is measured over the whole history, the
+                                                         card head counts the displayed year — so a 9-day run can sit
+                                                         under a head that says 4, and without this line one of the
+                                                         two figures reads as wrong. It states the arithmetic that
+                                                         joins them, in the year's own terms, and it is the ONLY
+                                                         carrier needed: the dashed rule is the tear in the page, the
+                                                         sentence is what a screen reader gets (WCAG 1.4.1 — no
+                                                         meaning on colour alone). Rendered only for runs that
+                                                         actually cross a New Year, so it never becomes furniture. --}}
+                                                    @if($stay['spans_years'])
+                                                        <p class="ptr-seam">
+                                                            <span class="ptr-seam-n">{{ $stay['days_in_year'] }}</span> of
+                                                            these <span class="ptr-seam-n">{{ $stay['days'] }}</span>
+                                                            days {{ $stay['days_in_year'] === 1 ? 'falls' : 'fall' }} in {{ $ptrStayYear }}
+                                                        </p>
+                                                    @endif
                                                 </li>
                                                 @if(!$loop->last)
                                                     <li class="pt-gap-rail py-1.5 my-1">
@@ -494,7 +578,7 @@ updated([
                                                             // dieses Aufenthalts zum ersten des naechsten. Kein abs() --
                                                             // eine negative Zahl waere ein echter Sortierfehler und soll
                                                             // sichtbar bleiben, statt still plausibel zu werden.
-                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($stay['bis'])->diffInDays(\Illuminate\Support\Carbon::parse($contiguousStays[$c][$key+1]['von'])) - 1;
+                                                            $daysInBetween = \Illuminate\Support\Carbon::parse($stay['to'])->diffInDays(\Illuminate\Support\Carbon::parse($ptrStays[$c][$key+1]['from'])) - 1;
                                                         @endphp
                                                         <span class="font-mono text-xs font-medium @if($daysInBetween < 21) text-risk dark:text-risk-bright @else text-ok dark:text-ok-bright @endif">
                                                             {{ $daysInBetween }} days gap{{ $daysInBetween < 21 ? ' · tight' : '' }}

@@ -451,11 +451,62 @@
         color: var(--color-navy-900); /* 14,19:1 on the chip, 16,20:1 on hover */
     }
 
+    /* =====================================================================
+       THE YEAR SEAM — a contiguous stay that runs across New Year.
+       A run is measured over the whole history ("9d"), the card head counts the
+       displayed calendar year ("4 days total"). Both are right, and next to
+       each other they read as a contradiction unless something says how they
+       fit together. So the run line gets a tear line and one sentence of
+       arithmetic: "4 of these 9 days fall in 2025".
+       WHY A DASHED RULE ON TOP, and not a badge or a colour: the shape has to
+       mean "a page edge the stay runs across", and this file's dashed idiom
+       (.pt-stamp::after, the impression ring) already reads as a document
+       perforation. The vertical DOTTED rail is taken — it means "time between
+       two stays" (.pt-gap-rail) — so the seam is horizontal and dashed, which
+       keeps one shape to one meaning.
+       The rule is decoration ONLY in the sense that removing it loses no
+       information: the sentence is the carrier, so colour is never alone
+       (WCAG 1.4.1) and a screen reader gets the whole statement. It is still
+       held to 1.4.11 (>=3:1) because it is what makes the annotation findable
+       when scanning, and at 1px there is no room for a mix: navy-400 is 4,78:1
+       on white but only 2,99:1 at 75% over the same white (measured), so the
+       token is used at full strength on both sides.
+       ===================================================================== */
+    .ptr-seam {
+        margin-top: 0.25rem;
+        padding-top: 0.25rem;
+        border-top: 1px dashed var(--color-navy-400); /* 4,78:1 on #fff */
+        font-size: 0.75rem; /* 12px — same as the date line above it (text-xs).
+                               NOT the eyebrows in this card: .eyebrow is 11px
+                               (app.css:132), so the annotation sits one step
+                               above the labels and level with the dates it
+                               explains. */
+        line-height: 1.45;
+        color: var(--color-navy-700); /* 13,12:1 on #fff */
+    }
+
+    /* The two figures the sentence reconciles. Mono because they are data, one
+       size step up and darker so the eye finds them first — weight and ink, not
+       size alone. */
+    .ptr-seam-n {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem; /* 13px */
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--color-navy-900); /* 17,27:1 on #fff */
+    }
+
     @media (prefers-color-scheme: dark) {
         .ptr-docket {
             background: rgba(255, 255, 255, 0.03);
             border-color: rgba(255, 255, 255, 0.08);
         }
+        /* Ratios against the card's dark ground, navy-900 #0f1a33. */
+        .ptr-seam {
+            border-top-color: var(--color-navy-300); /* 5,75:1 */
+            color: var(--color-navy-200); /*  9,44:1 */
+        }
+        .ptr-seam-n { color: var(--color-navy-50); } /* 15,94:1 */
         /* Ratios against the composited dark grounds: docket #162139,
            chip #1b253d, chip hover #252934. */
         .ptr-line-n { color: var(--color-navy-50); }  /* 14,79:1 */
