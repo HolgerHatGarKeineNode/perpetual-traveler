@@ -4,7 +4,9 @@
     "packageManager": "yarn@4.18.0",
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "test:js": "node --test 'tests/js/*.test.js'",
+        "test:js:zones": "node tests/js/zones.mjs"
     },
     "devDependencies": {
         "@defstudio/vite-livewire-plugin": "^3.0.7",

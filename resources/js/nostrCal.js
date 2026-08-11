@@ -2,6 +2,7 @@ import {Calendar} from '@fullcalendar/core'
 import multiMonthPlugin from '@fullcalendar/multimonth'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction';
+import {rangeDays} from './ptrDays.js';
 
 export default (livewireComponent) => ({
 
@@ -58,7 +59,22 @@ export default (livewireComponent) => ({
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
 
+        // A 'YYYY-MM-DD' string IS already this function's output format, so it
+        // is handed straight back — no Date in between, because there is no
+        // instant to convert. Routed through `new Date(d)` it was parsed as UTC
+        // midnight and read back with the LOCAL getters, which names the day
+        // BEFORE west of UTC: measured 2026-08-11, TZ=America/New_York turned
+        // '2026-03-14' into '2026-03-13'. dateClick() sets newEventEnd from this
+        // function, so that is the boundary of a stored stay — a wrong day here
+        // is a wrong residency day, and no zone may move a calendar date.
+        //
+        // The shortcut is deliberately limited to date-ONLY strings. A string
+        // with a time part is an instant, not a calendar date, and keeps the
+        // local rendering — as do Date objects, which is what all three call
+        // sites pass today (dayCellClassNames, dateClick, eventClick).
         const localISODate = (d) => {
+            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+
             const date = d instanceof Date ? d : new Date(d);
             const pad = (n) => String(n).padStart(2, '0');
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -165,39 +181,34 @@ export default (livewireComponent) => ({
     },
 
     /*
-     | THE ONE derivation of "which days". deleteDays(), setCountry() and the
-     | preview below all read THIS list, so the preview counts exactly the days
-     | that get written — they cannot disagree, because there is nothing to
-     | disagree with.
+     | THE ONE derivation of "which days" — now in resources/js/ptrDays.js, so
+     | it can be tested without a bundler (tests/js/ptrDays.test.js, run by
+     | `node tests/js/zones.mjs` across the timezone matrix). deleteDays(),
+     | setCountry() and the preview below all read THIS list, so the preview
+     | counts exactly the days that get written — they cannot disagree, because
+     | there is nothing to disagree with.
      |
      | That is also the reason the range half of the preview is computed here
      | and not on the server: a server-side preview would have to re-derive the
      | day list from (start, end), i.e. a SECOND derivation of the same thing.
-     | And this construction has a latent timezone off-by-one — `new Date(
-     | '2026-03-14')` is parsed as UTC and read back with the LOCAL getters, so
-     | west of UTC the whole list shifts a day (measured: TZ=America/New_York
-     | turns a 14.–16.03. drag into ['2026-03-13','2026-03-14','2026-03-15']).
-     | Pre-existing, present in this file before this phase, and deliberately
-     | NOT fixed here. But it is exactly why the two derivations must not exist
-     | side by side: the write would keep the shift while a "correct" server
-     | preview promised days that never get written. Sharing one list keeps the
-     | preview honest about the write, bug included.
+     |
+     | The derivation itself carries no timezone any more: it walks day ORDINALS
+     | and never touches a local getter (the invariant is written out in
+     | ptrDays.js — read it before touching the walk). Measured 2026-08-11: the
+     | returned list is byte-identical in all 11 zones of tests/js/zones.mjs. Two
+     | defects died with it, both pinned by the suite now:
+     |   1. west of UTC the whole list shifted one day back
+     |   2. in every DST zone a fall-back swallowed the last day of the range,
+     |      and for one day per zone and year a single tap wrote nothing at all
+     |      (which day that is has to be measured per zone — the days and the
+     |      reason there is no rule are in ptrDays.js)
+     | Sharing one list is what keeps the preview honest about the write:
+     | whatever the docket promises is what gets stored. A second, server-side
+     | derivation next to this write path would be worse than none, because the
+     | two could promise different days.
      */
     rangeDays() {
-        if (!this.newEventStart || !this.newEventEnd) return [];
-
-        const pad = (n) => String(n).padStart(2, '0');
-        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        const day = new Date(this.newEventStart);
-        const last = new Date(this.newEventEnd);
-        last.setDate(last.getDate() - 1); // endStr is exclusive
-
-        const days = [];
-        for (; day <= last; day.setDate(day.getDate() + 1)) {
-            days.push(fmt(day));
-        }
-
-        return days;
+        return rangeDays(this.newEventStart, this.newEventEnd);
     },
 
     /*
@@ -316,21 +327,20 @@ export default (livewireComponent) => ({
      | The head's date span, now read off the SAME list as the write and the
      | docket, so the three cannot state three different things.
      |
-     | BEHAVIOUR-NEUTRAL, measured — not an improvement. Against the previous
-     | implementation this returns the identical string under TZ=Europe/Berlin
-     | AND TZ=America/New_York ("03/14/2026 – 03/16/2026 (3 days)" and
-     | "03/13/2026 – 03/15/2026 (3 days)" respectively, matching the written day
-     | list in both). An earlier note here claimed the old label named an end
-     | date that was never written; that was wrong — `setDate()` operates on the
-     | LOCAL date, so the old `endExclusive − 1 day` already landed on the last
-     | written day. Only the source of the numbers changed, not the numbers.
+     | Reading the list instead of re-deriving the dates is what makes that
+     | guarantee hold: the label cannot name a day the write does not contain,
+     | because it has no dates of its own. Measured 2026-08-11 for the marked
+     | 14th-16th of March: "03/14/2026 – 03/16/2026 (3 days)" under
+     | TZ=Europe/Berlin AND TZ=America/New_York, matching the written list in
+     | both.
      |
-     | The local constructor instead of `new Date(iso)` is load-bearing for that
-     | equivalence, though: the ISO strings out of rangeDays() are LOCAL dates,
-     | and `new Date('2026-03-13')` is parsed as UTC, so west of UTC it would
-     | render "12.03.2026" for the entry "2026-03-13" (measured). The pre-
-     | existing shift documented on rangeDays() is untouched either way — the
-     | label keeps stating exactly the days that will be written.
+     | The local constructor instead of `new Date(iso)` is load-bearing, and
+     | more so than it looks: the entries are CALENDAR dates, while
+     | `new Date('2026-03-14')` is parsed as UTC midnight and rendered in the
+     | process zone. West of UTC that prints the day before — measured, the same
+     | range would read "03/13/2026 – 03/15/2026" under TZ=America/New_York for
+     | a list that writes 03-14, 03-15, 03-16. The label would then name three
+     | days the user never marked. Build the Date from the components, always.
      */
     rangeLabel() {
         const days = this.rangeDays();

@@ -59,7 +59,8 @@
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test",
+            "node tests/js/zones.mjs"
         ],
         "test:tia": [
             "Composer\\Config::disableProcessTimeout",
