@@ -8,7 +8,7 @@ use Carbon\CarbonImmutable;
 
 middleware(['auth']);
 
-state(['events', 'currentYear', 'start', 'selectedCountries', 'untrackedDays', 'untrackedWindow']);
+state(['events', 'eventBars', 'currentYear', 'start', 'selectedCountries', 'untrackedDays', 'untrackedWindow']);
 
 rules([
     'start' => 'required|date',
@@ -211,6 +211,130 @@ $refreshRecentCountries = protect(function () {
     $this->selectedCountries = collect($this->events)->pluck('country')->unique()->values()->toArray();
 });
 
+/*
+ | THE BAR PROJECTION — the grid's event source. One entry per contiguous stay
+ | that touches the displayed year, so a 30-day stay is ONE bar instead of 30
+ | chips: the run reads as one journey, the country NAME finds room inside it,
+ | and a cut segment can say that it comes from or goes somewhere else.
+ |
+ | THE DATA MODEL DOES NOT MOVE. One row per day stays the atomic unit — the
+ | residency rules count days — and $this->events stays day-wise and untouched
+ | beside this. Every counting path reads it: the modal's preview getters build
+ | their day->country map from it (resources/js/nostrCal.js), so do the docket,
+ | the chips and the stats pane. The bars are an ADDITIONAL channel; replacing
+ | `events` with ranges would make nearly every day in the docket read "no
+ | country".
+ |
+ | ONE DERIVATION, and literally one: the runs are read off $this->contiguousStays
+ | — the same computed property the stays panel prints, memoised for the request,
+ | so the bars in the grid and the runs in the panel are not two derivations that
+ | agree, they are one array read twice. Measured rather than assumed: ONE
+ | history query per request, in the mount request and in an update request alike
+ | (counted through DB::listen, with a deliberate extra query as the control that
+ | the counter reacts at all). A second grouping in JavaScript is what this
+ | avoids; the derivation itself lives in App\Support\ContiguousStays.
+ | Ordering: this runs from the four places that refresh $this->events, i.e.
+ | always BEFORE the render, so it is also the first touch of that memo — the
+ | year it counts for is the year the view then labels it with. That is what
+ | case 5 of tests/Feature/CalendarStayBarsTest.php pins from the other side:
+ | switching the year to 2025 must drop the run that only touches 2026, which a
+ | memo left over from the previous year would not do.
+ |
+ | WHY state() AND NOT computed(), against the reasoning on $contiguousStays
+ | above: only an entangled state() property reaches Alpine, and this payload is
+ | for the client. The size objection does not apply here — $contiguousStays is
+ | kept off the wire because it is derived from the WHOLE history (~11 000 rows
+ | for 30 years), while the bars are only the runs that intersect one year: at
+ | most 366 of them (a different country every day), i.e. the order of magnitude
+ | of `events`, which is already shipped.
+ |
+ | THE COUNTRY COMES OUT OF THE DAY-WISE CHANNEL, not out of a second country()
+ | lookup: ContiguousStays keys its runs by TITLE, and $this->events already
+ | carries the (title, country) pair for every tracked day of the year. So the
+ | two channels cannot spell a country differently — there is only one spelling.
+ |
+ | `?? null` IS REACHABLE, and the case is measured rather than imagined. The
+ | column is dateTime('day'), so a row can hold '2026-12-31 00:00:00'. The year
+ | query compares strings — where('day', '<=', '2026-12-31') — and excludes it,
+ | while ContiguousStays::ordinal() accepts it (its pattern allows a time part).
+ | Reproduced: one such row yields events = [] and one bar whose country is null.
+ | Unreachable through saveDays(), which writes the 'Y-m-d' strings the day list
+ | is built from, but reachable through any other writer.
+ | Rendering the bar without its code is the deliberate direction: the stay is a
+ | fact, and hiding it would be a wrong statement about where the traveller was,
+ | while a missing two-letter code costs a label the name already carries.
+ */
+$refreshEventBars = protect(function () {
+    /*
+     | Drop the memo before reading it, so this always derives from the CURRENT
+     | database and the CURRENT year rather than from whatever an earlier step of
+     | the same request happened to cache.
+     |
+     | The hole it closes: Livewire applies `updates` before `calls`, so a
+     | currentYear sync and a saveDays can land in ONE request. The year hook would
+     | then fill the memo BEFORE the write, and the second refresh would project a
+     | database state that no longer exists — the grid would sit one save behind
+     | `events`, and the two channels are meant to be incapable of disagreeing.
+     | Not reachable from the UI as it stands (the reviewer tried); closed anyway,
+     | because an unreachable path that shows a wrong DATE has cost this plan two
+     | phases already, and the fix is one line.
+     |
+     | Measured, not reasoned from the docs. That `unset()` on a Volt computed
+     | property really invalidates it: with the memo demonstrably warm (two
+     | consecutive reads cost 0 history queries each), the read after an unset()
+     | costs exactly 1 — so the cache was active and the unset cleared it. The
+     | mechanism is BaseComputed::handleMagicUnset() dropping the same
+     | $requestCachedValue that the getter fills
+     | (vendor/livewire/livewire/src/Features/SupportComputed/BaseComputed.php).
+     | And it costs nothing here, because at this point the memo is empty anyway:
+     | still ONE history query per request, in the mount request and in an update
+     | request alike, before and after this line.
+     */
+    unset($this->contiguousStays);
+
+    $codeByTitle = collect($this->events)->pluck('country', 'title');
+
+    $bars = [];
+
+    foreach ($this->contiguousStays as $title => $runs) {
+        foreach ($runs as $run) {
+            $bars[] = [
+                'title' => $title,
+                'country' => $codeByTitle->get($title),
+                // The TRUE range, never clipped to the displayed year: a bar
+                // that starts in December renders its visible part in the
+                // January grid and reports fc-event-start = false at the cut,
+                // which is what lets the segment say "this comes from before".
+                'start' => $run['from'],
+                // THE ONE +1 IN THE WHOLE PIPELINE. ContiguousStays reports `to`
+                // INCLUSIVE, FullCalendar reads `end` EXCLUSIVE, so the shift
+                // happens exactly here and nowhere else — a missing one makes a
+                // single-day bar an empty range, i.e. invisible; a doubled one
+                // claims a day the traveller was elsewhere.
+                // addDay() and not addRealDays(): "the next day" is CALENDAR
+                // arithmetic, not elapsed time. Measured on the 25-hour Berlin
+                // fall-back day, 2026-10-25 -> addDay() 2026-10-26 against
+                // addRealDays(1) 2026-10-25 — the elapsed variant loses a day.
+                // 'UTC' is named so the result provably consults no zone at all.
+                // Measured across UTC, Europe/Berlin, America/New_York,
+                // America/Santiago and America/Havana x 8 boundary days (month,
+                // leap day, New Year, all three midnight/DST shifts): 40 of 40
+                // correct. And, against the obvious suspicion: the UNNAMED
+                // variant agreed in all 40 too — even where local midnight does
+                // not exist (Santiago 2026-09-06, Havana 2026-03-08), addDay()
+                // moves the date component and comes out right. So this is not
+                // repair of a measured defect, it is one dependency fewer.
+                'end' => CarbonImmutable::parse($run['to'], 'UTC')->addDay()->format('Y-m-d'),
+            ];
+        }
+    }
+
+    // A LIST, so the JSON is a JS array: nostrCal.js maps over this payload, and
+    // .map() on an object throws — which would not misplace a bar, it would stop
+    // the calendar from initialising at all.
+    $this->eventBars = $bars;
+});
+
 $deleteDays = function ($days) {
     $currentYear = $this->currentYear ?? now()->year;
 
@@ -236,6 +360,8 @@ $deleteDays = function ($days) {
 
     $this->refreshRecentCountries();
     $this->refreshUntrackedDays();
+    // After $this->events, because the bars take their country spelling from it.
+    $this->refreshEventBars();
 };
 
 $saveDays = function ($days, $country) {
@@ -267,6 +393,8 @@ $saveDays = function ($days, $country) {
 
     $this->refreshRecentCountries();
     $this->refreshUntrackedDays();
+    // After $this->events, because the bars take their country spelling from it.
+    $this->refreshEventBars();
 };
 
 mount(function () {
@@ -290,6 +418,11 @@ mount(function () {
 
     // After $start, because the lower bound comes from it.
     $this->refreshUntrackedDays();
+
+    // After $this->events, because the bars take their country spelling from it.
+    // The grid's event source, so it has to exist before the first paint —
+    // Alpine entangles it and reads it in init().
+    $this->refreshEventBars();
 });
 
 updated([
@@ -312,6 +445,9 @@ updated([
         // different year — the chip set has to follow it.
         $this->refreshRecentCountries();
         $this->refreshUntrackedDays();
+        // And the grid now shows a different year, so a different set of runs
+        // intersects it. After $this->events, for the country spelling.
+        $this->refreshEventBars();
     },
     'start' => function () {
         $user = auth()->user();
@@ -443,6 +579,19 @@ updated([
                                 @endif
                             </div>
                         </div>
+
+                        {{-- THE DAY CURSOR, SPOKEN. Tab reaches a stay bar in the grid and
+                             the arrow keys walk its days (resources/js/nostrCal.js). The
+                             cursor mark is visual, so on its own it would make the walk
+                             operable but not perceivable — this region says the day out
+                             loud instead. It is the same division of labour the untracked
+                             sentence above uses: a texture in the grid, a sentence for
+                             anyone who cannot see it.
+                             OUTSIDE wire:ignore on purpose, so Alpine owns its text; and
+                             sr-only rather than hidden, because an aria-live region that is
+                             display:none is not announced at all. Empty until a bar is
+                             focused, so it says nothing on load. --}}
+                        <p class="sr-only" aria-live="polite" x-text="barCursorSpoken"></p>
 
                         <div wire:ignore
                              x-show="tab === 'calendar'"

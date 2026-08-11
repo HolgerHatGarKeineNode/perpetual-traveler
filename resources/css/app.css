@@ -564,7 +564,7 @@
     }
 }
 
-/* Show ONLY the country flag as a compact display (unchanged principle) */
+/* Chrome off the event box itself — the band inside it carries everything */
 .fc-event,
 .fc-daygrid-event,
 .fc-multimonth-event {
@@ -574,6 +574,32 @@
     margin: 0 !important;
     box-shadow: none !important;
     cursor: default;
+    /* THE BAND MUST NOT SWALLOW THE POINTER, and this is load-bearing rather
+       than tidy. FullCalendar refuses to start a date selection or a dateClick
+       when the pointerdown lands inside an event:
+         isValidDateDownEl(el) { return !elementClosest(el, '.fc-event:...') ... }
+         (@fullcalendar/core internal-common.js:5836)
+       What that box was BEFORE this phase, measured on 8dd30f4 rather than
+       assumed: the `.fc-event` was already 63,09px of a 64,09px cell — full
+       width. The 38,5px often quoted is the inner `.ptr-flag` span, which
+       elementClosest() never inspects. So a drag out of the middle of a stamped
+       cell was not "lucky", it was already dead: 0 of 9 attempts. The escape was
+       VERTICAL — the box is 14,59px tall in a 60,39px cell, covering 0,37 to
+       0,61 of its height, so only a drag starting clearly above or below it
+       worked. A band makes that gap disappear, so without this rule NO drag
+       could start on a stamped day at all (measured: a drag 04.->07.03. across a
+       band produced no selection, while the same drag over free days produced
+       its three days).
+       With the pointer passing through, one path serves every day in the grid:
+       dateClick reports the day that was clicked, stamped or not. The events
+       are declared non-interactive anyway (cursor: default above), so this
+       takes away no affordance the design offered.
+       WHAT THIS DOES NOT TAKE AWAY, because it was checked rather than assumed:
+       pointer-events reaches neither the accessibility tree nor the keyboard, so
+       the band keeps its role and aria-label, and the Enter/Space bridge
+       FullCalendar puts on a tabbable segment still fires eventClick. Which day
+       that opens is the day cursor's business, further down. */
+    pointer-events: none;
 }
 
 .fc-daygrid-event-harness {
@@ -586,51 +612,251 @@
     color: inherit !important;
 }
 
-.ptr-flag {
-    display: inline-flex;
+/* =========================================================================
+   THE STAY BAND — one contiguous stay as ONE bar across its days.
+   Before this, every day carried its own flag chip: a 30-day stay was 30
+   identical stamps and the reader had to add them up. The band is the same
+   fact stated once, and the room it frees is what finally puts the country
+   NAME on screen instead of a flag the eye has to decode.
+
+   THE SIGNATURE — THE FINISHED EDGE. A stay is a stamped band, and its two
+   ends are the only places where something happened: the day you arrived and
+   the day you left. FullCalendar slices a bar at every week boundary and at
+   the edge of the year view, so most bars have edges that mean nothing. The
+   band therefore distinguishes a TERMINUS from a CUT, and it does so with
+   three channels at once, because it is one gesture — an edge is either
+   finished or it is not:
+     terminus (.fc-event-start / .fc-event-end are present)
+       -> a 2px ink cap, the corners rounded, and the band held 2px off the
+          cell wall: it closes.
+     cut (the class is absent — verified in @fullcalendar/core, seg.isStart /
+          seg.isEnd, internal-common.js:6267)
+       -> no cap, square corners, flush into the wall, so the segment reads as
+          continuing into the one in the next row or the next year.
+   Flush-and-square as "this continues" is not invented here: it is the same
+   argument .fc-highlight already makes a few rules down, where consecutive
+   week rows merge into one column precisely because their edges are flush.
+   The caps are NAVY ink, never gold: gold at a cell edge is taken — it is the
+   date selection — and one shape must not carry two meanings.
+   No day-count in the band. A segment cannot honestly print the run's length
+   (it is only part of it), and the length already has an authoritative home
+   in the stays panel, unsegmented.
+   ========================================================================= */
+.ptr-stay {
+    /* The band's width comes from the harness FullCalendar sized — one cell per
+       day — and never from its content: that is what makes the container query
+       below a query about DAYS, and why it works identically at 390px and at
+       1440px. A 5-day stay has room for the country name on a phone too, which
+       a viewport breakpoint could never express. */
+    container-type: inline-size;
+    display: flex;
     align-items: center;
     gap: 0.25rem;
+    min-width: 0;
+    padding: 1px 3px;
     line-height: 1;
-    font-size: 1.05rem;
-    padding: 0 1px;
+    /* Explicit, although container-type already implies `contain: layout` and
+       with it a containing block for the absolutely positioned day cursor below.
+       Written out so that dropping the container query some day cannot silently
+       send the cursor off to the nearest positioned ancestor. */
+    position: relative;
+    /* The flag, and the box's own height with it. Same 0.9rem the desktop chip
+       used, now at every width — the band's height is what has to stay put, and
+       an emoji that grows on small screens would push the year grid taller. */
+    font-size: 0.9rem;
+    /* Decorative: it groups the days of one stay, it does not carry the fact.
+       The caps mark the extent and the flag/name the country, so this is not
+       held to 1.4.11 — and it stays this quiet on purpose, so a row of bars
+       never competes with the today tint or the selection wash underneath it.
+       1,13:1 against the white card, 1,12:1 on today / selected / both;
+       1,17:1 on navy-900, 1,18-1,20:1 on the dark tints (measured). */
+    background: color-mix(in srgb, var(--color-navy-500) 8%, transparent);
 }
 
-/* saturate() used to sit on .ptr-flag; it now targets the emoji alone so it
-   cannot tint the code label (a parent filter is not undoable by a child). */
-.ptr-flag-emoji {
+/* saturate() targets the emoji alone so it cannot tint the labels beside it
+   (a parent filter is not undoable by a child). */
+.ptr-stay-flag {
+    flex: none;
     filter: saturate(1.05);
 }
 
-/* The two-letter ISO code disambiguates look-alike flags at 14px. Mobile day
-   cells are too narrow for it, so it appears from the same 1024px breakpoint
-   the JS uses for the desktop layout (isMobile === max-width: 1023px). */
-.ptr-code {
+/* THE FINISHED EDGE. 1.4.11 asks 3:1 for a graphical object that carries
+   meaning, and this one does — it is the difference between "the stay ends
+   here" and "the stay goes on". Measured against BOTH neighbours, the band's
+   own wash inside and the bare cell outside, on all four grounds a day cell
+   can take (plain / today / selected / today+selected):
+     light  navy-600 -> 9,16 · 8,43 · 8,03 · 7,51 on the wash
+                        10,33 · 9,47 · 9,01 · 8,41 on the cell
+     dark   navy-200 -> 8,05 · 5,76 · 5,25 · 3,88 on the wash
+                        9,44 · 6,94 · 6,32 · 4,58 on the cell
+   A hatched cell is not in that list: untracked means "no country", so a day
+   with a band can never be one — the same exclusion .ptr-untracked's cleared
+   field already relies on. */
+.fc-event-start .ptr-stay {
+    margin-left: 2px;
+    border-left: 2px solid var(--color-navy-600);
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.fc-event-end .ptr-stay {
+    margin-right: 2px;
+    border-right: 2px solid var(--color-navy-600);
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+/* =========================================================================
+   THE DAY CURSOR — where the keyboard stands inside a stay.
+   Tab reaches a bar, the arrow keys walk its days (nostrCal.js), and this is
+   the mark that says which day Enter would open. It exists because the bar
+   collapsed one tab stop per day into one per stay, and a keyboard user still
+   has to reach every single day.
+   WHY IT REPLACES THE FOCUS RING instead of sitting inside it: a ring around
+   the whole bar would say "somewhere in these five days", which is exactly the
+   information that went missing. The cursor is the more precise focus
+   indicator, so the two are one thing and not two — hence outline: none on the
+   same selector that shows the cursor. They cannot come apart.
+   WHY GOLD, when the caps are deliberately not: gold in this file means "the
+   thing you are about to act on" — the today tint, the selection wash, the
+   selection rails, the focus ring. The cursor is that, at the width of one day,
+   so it joins an existing meaning rather than adding one. The caps say
+   something else (where the stay ends), which is why they are ink.
+   :focus and not :focus-visible on purpose, and it is not laxer here: the bar
+   passes the pointer through, so it cannot be focused by mouse or touch at all
+   — every focus this rule can see is a keyboard focus.
+   The geometry needs no JS measuring and survives a resize: the bar spans
+   exactly one cell per day, so 100%/--ptr-days is one day wide and --ptr-cursor
+   counts days from its start. Both come from nostrCal.js; the fallbacks 1 and 0
+   draw a box around the whole bar, so a bar focused before the script has
+   painted still shows a visible indicator (WCAG 2.4.7) rather than nothing.
+   The residual, measured on a 5-day bar at 1440px: the cursor is 62,3px against
+   a 64,1px cell and its centre sits at most 3,6px off the cell's centre, at the
+   two outermost days, 0px in the middle — because the bar's own box is 4px
+   narrower than its cells wherever a cap holds it off the wall. Correcting it
+   would mean feeding the cap widths back in as two more custom properties; at
+   5,6% of a cell width, with the box still overlapping its own day by 93,0% at
+   the two outermost days (95,8 / 97,2 / 95,8 in the middle), that buys nothing a
+   reader could notice.
+   Contrast as a graphical object (1.4.11, 3:1) against the wash it sits on and
+   the four cell grounds underneath — see the measured table in the report.
+   ========================================================================= */
+.ptr-stay-cursor {
     display: none;
+    position: absolute;
+    /* Over the band's own padding, so the mark reads as a full-height cell and
+       not as a box floating inside one. */
+    top: -1px;
+    bottom: -1px;
+    width: calc(100% / var(--ptr-days, 1));
+    left: calc(var(--ptr-cursor, 0) * 100% / var(--ptr-days, 1));
+    border: 2px solid var(--color-gold-600);
+    /* Square: it marks a cell of the grid, and the grid has no rounded cells.
+       The rounded corners in this component mean "the stay ends here", which is
+       not what a cursor says. */
+    border-radius: 0;
 }
 
-@media (min-width: 1024px) {
-    .ptr-flag {
-        font-size: 0.9rem;
-    }
+.fc-event:focus {
+    outline: none;
+}
 
-    .ptr-code {
+.fc-event:focus .ptr-stay-cursor {
+    display: block;
+}
+
+/* The two labels are mutually exclusive, so they share one ink. 4,5:1 is the
+   bar (1.4.3, both are small text): light navy-700 on the wash reads 11,64 ·
+   10,70 · 10,20 · 9,54 over the four cell grounds, dark navy-100 7,95 · 7,24 ·
+   5,35 and 11,09 on the plain card (measured).
+   The name is set in the UI sans and sentence case — a country is a label, and
+   this system reserves mono for data (codes, dates, counts). The code keeps the
+   mono voice it always had. */
+.ptr-stay-code,
+.ptr-stay-name {
+    display: none;
+    color: var(--color-navy-700);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ptr-stay-code {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex: none;
+}
+
+.ptr-stay-name {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem; /* 11px — the system's smallest step, as .eyebrow */
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    min-width: 0;
+}
+
+/* WHAT FITS, and the thresholds come from measurement rather than arithmetic —
+   a container query asks about the CONTENT box, so the band's own padding and
+   caps are already subtracted. Measured content widths of a ONE-DAY band:
+     1440px, year grid   cell 64,09px -> 49px
+     1024px, year grid   cell 82,72px -> 68px
+      390px, month grid  cell 47,14px -> 32px
+   A first attempt at 56px was wrong for exactly that reason: it silently hid
+   the ISO code on every single-day band in the year grid, where the old chip
+   showed it.
+     >= 40px  the flag takes the ISO code beside it. 40 sits in the middle of
+              the safe band (8px above the widest phone day, 9px below the
+              narrowest desktop day) and above what the pair needs to render
+              (flag 15px + gap 4px + "DE" ~14px = 33px). This is the split the
+              old 1024px media query made, now stated as the width it was always
+              really about — which is why a wide month grid gets it too.
+     >= 150px the NAME, and the code goes: once the country is spelled out the
+              code disambiguates nothing. 150px leaves ~131px for the name after
+              the flag, i.e. ~28 characters of 11px Inter, so nearly every
+              country name fits whole. Below it a long name would read
+              "United King…", which is not information, while two letters are. */
+@container (min-width: 40px) {
+    .ptr-stay-code {
         display: inline;
-        font-family: var(--font-mono);
-        font-size: 0.6875rem;
-        font-weight: 600;
-        line-height: 1;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        /* >=9:1 on the white card, and still 9.0:1 on the gold-tinted
-           today/selection grounds */
-        color: var(--color-navy-600);
     }
 }
 
-@media (min-width: 1024px) and (prefers-color-scheme: dark) {
-    .ptr-code {
-        /* 9.4:1 on navy-900, 6.3:1 on the gold-tinted selection ground */
-        color: var(--color-navy-200);
+@container (min-width: 150px) {
+    .ptr-stay-code {
+        display: none;
+    }
+
+    .ptr-stay-name {
+        display: inline;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .ptr-stay {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .fc-event-start .ptr-stay {
+        border-left-color: var(--color-navy-200);
+    }
+
+    .fc-event-end .ptr-stay {
+        border-right-color: var(--color-navy-200);
+    }
+
+    .ptr-stay-code,
+    .ptr-stay-name {
+        color: var(--color-navy-100);
+    }
+
+    /* Same inversion the selection rails make a few rules down, and for the same
+       measured reason: gold-600 is too dark to read as a mark on navy-900. */
+    .ptr-stay-cursor {
+        border-color: var(--color-gold-400);
     }
 }
 
