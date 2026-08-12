@@ -1133,10 +1133,11 @@
        ground to match — the card.
    Digit against the ground it now actually sits on:
      light  navy-500 -> 7,56:1 on the field · 6,59:1 with the wash over it
-     dark   navy-300 -> 5,75:1 on the field · 3,85:1 with the wash over it
-                        (that last one is the day number on the SELECTION, a
-                        pre-existing shortfall identical on unhatched cells —
-                        reported, not silently patched here)
+     dark   navy-200 -> 9,44:1 on the field · 6,32:1 with the wash over it
+                        (this was navy-300 = 5,75:1 / 3,85:1, and the second
+                        number was a 1.4.3 fail on the SELECTED cell, identical
+                        on unhatched cells; closed at the dark day-number rule
+                        below, not by touching the wash)
    The engraving stays unambiguous: 4,78:1 plain / 4,17:1 under the wash in
    light, 9,44:1 / 6,32:1 in dark, against 3:1 required by 1.4.11. */
 .fc .fc-daygrid-day.ptr-untracked .fc-daygrid-day-top {
@@ -1166,6 +1167,52 @@
         inset -2px 0 0 0 var(--color-gold-600),
         inset 0 1px 0 0 var(--color-gold-600),
         inset 0 -1px 0 0 var(--color-gold-600);
+}
+
+/* THE BLEED CELLS — the days of the neighbouring month that fill out the first
+   and last week of `dayGridMonth`. Reachable on the phone only (the year grid
+   sets showNonCurrentDates false, multimonth/index.js:236); on the phone it is
+   the path a stay across a month boundary is entered on.
+   FullCalendar dims them with `.fc .fc-day-other .fc-daygrid-day-top{opacity:.3}`
+   (daygrid/internal.js:985, injected at runtime — this is why the rule is
+   nowhere in this file). Two measured problems with that, both 1.4.3:
+     - the DIGIT composites at 30% against its own ground. Both grounds a bleed
+       cell can take, with the exact chain, because the worse of the two is not
+       the one you reach for first — and the dark row uses navy-200, the colour
+       the day number carries AFTER the fix further down, not the navy-300 it
+       had before:
+         light navy-500 #3d5480 @30% -> #c5ccd9 on the bare card #ffffff  1,62:1
+                                     -> #c2c0bb on the wash    #fbeed5    1,59:1
+         dark  navy-200 #b4c0d8 @30% -> #414c65 on the bare card #0f1a33  2,00:1
+                                     -> #606166 on the wash    #3c3835    1,87:1
+       (wash = gold-400 #efb23e at 22% light / 20% dark over the card, i.e. the
+       same --fc-highlight-color the rails below are measured against.)
+       4,5:1 is asked; the number is effectively not set off.
+     - it hits `.fc-daygrid-day-top`, the very element the cleared date field
+       above hangs on. opacity composites a subtree INCLUDING its own
+       background, so on an untracked bleed cell the field turns 30% opaque and
+       the guilloche runs through the digits again — 1,32:1 light / 1,21:1 dark,
+       i.e. WORSE than the 1,58/1,64:1 defect that field was built to repair.
+   So the dimming stays as a signal but changes carrier and value:
+     - `opacity: 1` on the day-top gives the cleared field its opacity back;
+     - the step moves to the NUMBER, where it is the only thing it dims, at the
+       measured floor: navy-500@85% -> 5,16:1 plain · 4,67:1 on the wash;
+       navy-200@85% -> 7,15:1 · 5,05:1. 0.8 was tried and fails (4,18:1 light).
+   Why not a colour step instead (navy-500 -> navy-400): navy-400 is 4,78:1 on
+   the bare card but 4,17:1 under the selection wash — it would trade this fail
+   for a quieter one. Why not a ground tint: FILL is `today`'s channel in the
+   three-channel scheme above, and a bleed cell CAN be today.
+   `today` is exempt for the same reason: it outranks "wrong month" as an
+   orientation mark, and its digit carries gold, which has its own ratios.
+   Specificity 0,4,0 / 0,5,0 so neither rule depends on whether FullCalendar's
+   injected <style> lands before this sheet (it does — internal-common.js:32
+   inserts before the first script/link/style in head — but a tie decided by
+   load order is not a thing to rest an AA floor on). */
+.fc .fc-daygrid-day.fc-day-other .fc-daygrid-day-top {
+    opacity: 1;
+}
+.fc .fc-daygrid-day.fc-day-other:not(.fc-day-today) .fc-daygrid-day-number {
+    opacity: 0.85;
 }
 
 /* Legend swatch above the calendar. Same --ptr-hatch token as the cells, so
@@ -1239,8 +1286,19 @@
     .fc .fc-col-header-cell-cushion {
         color: var(--color-navy-300);
     }
+    /* navy-200, not navy-300 — WCAG 1.4.3 on the SELECTED cell. The digit is
+       12px mono, so 4,5:1 applies (12px bold is not "large text": 1.4.3 wants
+       18pt, or 14pt bold). navy-300 #8595b8 holds 5,75:1 on the bare card
+       #0f1a33, but the selection wash (gold-400 at 20%) composites the ground
+       to #3c3835 and the digit drops to 3,85:1 — a fail on the one cell the
+       user is looking at while dragging. navy-200 #b4c0d8 on the same two
+       grounds: 9,44:1 plain · 6,32:1 on the wash.
+       The wash and its rails are deliberately NOT touched: gold-400 keeps
+       9,14 · 6,72 · 6,12 · 4,44 over the four grounds (1.4.11 asks 3:1), and
+       navy-200 is the colour the guilloche already uses here, so the cell does
+       not gain a fifth ink. */
     .fc .fc-daygrid-day-number {
-        color: var(--color-navy-300);
+        color: var(--color-navy-200);
     }
     .fc .fc-day-today .fc-daygrid-day-number {
         color: var(--color-gold-300);
