@@ -3,6 +3,7 @@ import multiMonthPlugin from '@fullcalendar/multimonth'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction';
 import {rangeDays, resizeDelta} from './ptrDays.js';
+import {localISODate} from './localISODate.js';
 
 export default (livewireComponent) => ({
 
@@ -104,26 +105,10 @@ export default (livewireComponent) => ({
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
 
-        // A 'YYYY-MM-DD' string IS already this function's output format, so it
-        // is handed straight back — no Date in between, because there is no
-        // instant to convert. Routed through `new Date(d)` it was parsed as UTC
-        // midnight and read back with the LOCAL getters, which names the day
-        // BEFORE west of UTC: measured 2026-08-11, TZ=America/New_York turned
-        // '2026-03-14' into '2026-03-13'. dateClick() sets newEventEnd from this
-        // function, so that is the boundary of a stored stay — a wrong day here
-        // is a wrong residency day, and no zone may move a calendar date.
-        //
-        // The shortcut is deliberately limited to date-ONLY strings. A string
-        // with a time part is an instant, not a calendar date, and keeps the
-        // local rendering — as do Date objects, which is what both call sites
-        // pass today (dayCellClassNames, dateClick).
-        const localISODate = (d) => {
-            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-
-            const date = d instanceof Date ? d : new Date(d);
-            const pad = (n) => String(n).padStart(2, '0');
-            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-        };
+        // localISODate() moved to resources/js/localISODate.js so a Node test
+        // can import it without booting FullCalendar/jsdom — see that file for
+        // the invariant (local getters ARE correct here, unlike ptrDays.js) and
+        // the year-padding fix.
 
         // Set lookup, rebuilt whenever the server ships a new list. The factory
         // exists so the option and its later replacement share ONE body but get
@@ -504,7 +489,18 @@ export default (livewireComponent) => ({
 
         // The segments of one bar, in calendar order. Identified by the range
         // itself: two segments of the same stay carry the same from/to pair, and
-        // no other bar can — a country cannot hold two runs with equal bounds.
+        // no other bar can, UNCONDITIONALLY — a day belongs to exactly one
+        // country (the unique index on (user_id, day), migration
+        // 2026_08_13_001604_add_unique_index_to_events_user_id_day.php), so two
+        // bars can never claim the identical set of calendar days regardless of
+        // which countries they carry. Before that index this held only under an
+        // assumption a corrupt or racing write could break: two rows for the
+        // same day, different countries, produced two separate one-day runs
+        // with identical [from, to) bounds (App\Support\ContiguousStays' usort
+        // tie-break on the title is what made that case deterministic rather
+        // than order-dependent, not what prevented it) — pinned in
+        // tests/Unit/ContiguousStaysGuardsTest.php, which reaches that state by
+        // constructing it directly, the only way left to reach it at all.
         const segmentsOfBar = (eventEl) => {
             const band = bandOf(eventEl);
             if (!band) return [eventEl];

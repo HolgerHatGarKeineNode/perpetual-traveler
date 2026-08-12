@@ -569,3 +569,58 @@ test('a stay that ends on 1 January appears in that year with its full length', 
         ->and($card['seams'])->toBe(['1 of these 5 days falls in 2026'])
         ->and($card['total_days'])->toBe(1);
 });
+
+/*
+ | GUARD — the seam line's OWN year clamp (calendar.blade.php, $ptrStayYear =
+ | max(1970, min(9999, ...))), P9 Welle A point 4 of the plan. It sits next to,
+ | but is not the same clamp as, the one inside the $contiguousStays computed
+ | property: removing $ptrStayYear's clamp would still pick the right RUNS (the
+ | computed property's own clamp is untouched) but LABEL the seam sentence with
+ | the raw, unclamped currentYear — the day share would be counted for one year
+ | and captioned with another.
+ |
+ | WHY THIS PARTICULAR FIXTURE, and not simply "set an absurd currentYear" like
+ | the untracked-days guard does: the day-wise events query that drives which
+ | country CARDS render at all (calendar.blade.php's four Event::query() calls
+ | outside $contiguousStays) is NOT clamped — it compares the raw currentYear as
+ | a string against the stored day. Measured directly against sqlite: with
+ | currentYear = 500000 or 99999 that query matches NOTHING (`9999-...` sorts
+ | AFTER `500000-...` lexicographically, so no stored 4-digit year ever falls
+ | inside a 6- or 5-digit bound), so no card renders at all for those and the
+ | guard would be unobservable through them.
+ |
+ | The fixture that stays observable exploits the same asymmetry the other way:
+ | currentYear = 1500 is absurd (well outside the [1970, 9999] window) but is
+ | still a plain 4-digit string, so the RAW query for the Germany card can be
+ | satisfied by planting one ordinary DE day at 1500-06-15 — giving the card a
+ | reason to render — while the RUN shown inside it is an entirely separate,
+ | ordinary 1969/1970 New Year crossing that the CLAMPED contiguousStays finds
+ | for year 1970 (max(1970, min(9999, 1500)) = 1970). With the clamp intact the
+ | seam names 1970, the year the 5-of-9 share was actually counted for; with it
+ | removed the same sentence would name 1500 instead, which the run never
+ | touched.
+ */
+test('the seam line names the clamped year, not an absurd client-supplied one', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    // Gives the Germany card a reason to render at currentYear = 1500: the
+    // day-wise events query is unclamped and matches this literally.
+    stampDays($user, 'de', ['1500-06-15']);
+
+    // The actual run the seam line is about — an ordinary New Year crossing
+    // at the LOWER clamp bound. Hand-counted exactly like crossYearFixture():
+    // 28.-31.12.1969 = 4 days, 01.-05.01.1970 = 5 days, 9 days total.
+    stampDays($user, 'de', [
+        '1969-12-28', '1969-12-29', '1969-12-30', '1969-12-31',
+        '1970-01-01', '1970-01-02', '1970-01-03', '1970-01-04', '1970-01-05',
+    ]);
+
+    $card = extractStayCard(Volt::test('calendar')->set('currentYear', 1500)->html(), 'Germany');
+
+    expect($card)->not->toBeNull()
+        ->and($card['runs'])->toContain(['days' => 9, 'from' => '28.12.1969', 'to' => '05.01.1970'])
+        // The clamped year (1970), never the raw client value (1500).
+        ->and($card['seams'])->toContain('5 of these 9 days fall in 1970')
+        ->and($card['seams'])->not->toContain('5 of these 9 days fall in 1500');
+});
