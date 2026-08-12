@@ -2,7 +2,7 @@ import {Calendar} from '@fullcalendar/core'
 import multiMonthPlugin from '@fullcalendar/multimonth'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction';
-import {rangeDays} from './ptrDays.js';
+import {rangeDays, resizeDelta} from './ptrDays.js';
 
 export default (livewireComponent) => ({
 
@@ -148,6 +148,44 @@ export default (livewireComponent) => ({
                 ? {left: 'prev,next', center: 'title', right: 'today'}
                 : {left: 'prev,next', center: 'title', right: 'today'},
             eventOverlap: false,
+            /*
+             | RESIZE, AND ONLY RESIZE — the two options that open the edges, and
+             | the one that stays shut.
+             |
+             | `eventDurationEditable` puts a resizer on both terminals of a bar,
+             | `eventResizableFromStart` is what the START one hangs on
+             | (computeSegStartResizable, @fullcalendar/core internal-common.js
+             | :4386 — it is undefined in BASE_OPTION_DEFAULTS, so nothing else
+             | turns it on). `editable` and `eventStartEditable` are deliberately
+             | NOT set: startEditable is what makes a bar DRAGGABLE, and moving a
+             | stay is a different act (delete here, write there) with a different
+             | meaning, so it is not on offer. Two independent things say so:
+             | the `fc-event-draggable` class is never added, and
+             | applyMutationToEventInstance discards a datesDelta without
+             | startEditable (:3813 — the sibling applyMutationToEventDef at
+             | :3782-3803 does not touch datesDelta at all, so naming it here was
+             | wrong). P4's `pointer-events: none` on the band is a third — a drag
+             | out of the band's middle produces a date SELECTION, measured in both
+             | configurations.
+             |
+             | Resizing needs neither of the two, so "resize from the front" comes
+             | without "move the whole stay" attached — which is the only reason
+             | this phase could be cut this narrowly.
+             |
+             | DESKTOP ONLY, and the gate is the OPTION rather than CSS: with these
+             | two false, FullCalendar renders no resizer element at all, so the
+             | phone keeps a grid with nothing new in it — no hit area to compete
+             | with the multi-day selection that `touch-action: none` carries, and
+             | no 8px control on a touch screen that could never show a hover state
+             | anyway. Same query the view choice above uses, so "the year grid" and
+             | "resizable" are one decision: dayGridMonth is the phone's view, and
+             | it is the only view with bleed cells into the neighbouring year.
+             | Measured consequence of that pairing: a resize can never leave the
+             | displayed year, because multiMonthYear sets showNonCurrentDates
+             | false.
+             */
+            eventDurationEditable: !isMobile,
+            eventResizableFromStart: !isMobile,
             selectable: true,
             selectMirror: true,
             unselectAuto: false,
@@ -287,9 +325,30 @@ export default (livewireComponent) => ({
              | the cursor stands on. Without a single arrow press that is the first
              | day of the focused segment, which is also the fallback here if the
              | cursor belongs to another band.
+             |
+             | ONE POINTER CAN REACH THIS AFTER ALL — the resize grip, and that is
+             | why the first branch below exists. The grips are the only descendants
+             | of the band that take the pointer, so a CLICK on one (press and
+             | release without moving: too little movement for a resize) bubbles to
+             | the segment anchor and lands here. Measured before the branch existed:
+             | a click on the END grip, which sits over the stay's LAST day, opened
+             | the modal for its FIRST day — info.el is the whole segment and its
+             | closest td is the segment's first cell. That is a P4 property broken
+             | by 8px, so the grip now answers with the day it is drawn on: the end
+             | grip the segment's last day, the start grip its first. Both read off
+             | daysOfSegment(), the same list the day cursor walks, so there is no
+             | second notion of "the days of this segment".
              */
             eventClick: (info) => {
-                const day = (cursor.el === info.el && this.barCursorDay)
+                const grip = info.jsEvent?.target?.closest?.('.fc-event-resizer');
+                const segment = grip ? daysOfSegment(info.el) : [];
+
+                const gripDay = grip && segment.length
+                    ? (grip.classList.contains('fc-event-resizer-end') ? segment[segment.length - 1] : segment[0])
+                    : null;
+
+                const day = gripDay
+                    || (cursor.el === info.el && this.barCursorDay)
                     || info.el.closest('td[data-date]')?.getAttribute('data-date')
                     || localISODate(info.event.start);
 
@@ -302,6 +361,93 @@ export default (livewireComponent) => ({
                 this.newEventStart = day;
                 this.newEventEnd = localISODate(next);
                 this.modalOpen = true;
+            },
+            /*
+             | THE EDGE WAS PULLED — the whole write path of a correction, and the
+             | only handler in this file that computes nothing itself.
+             |
+             | resizeDelta() turns the two ranges into the two write instructions
+             | (resources/js/ptrDays.js — read the fail-closed argument there before
+             | touching this). `added` goes to saveDays with the bar's own country,
+             | `removed` to deleteDays; a resize moves exactly one edge, so one of
+             | them is empty in practice, and both are handled because the function
+             | answers both.
+             |
+             | oldEvent carries the state BEFORE the drag and event the one after,
+             | both as 'Y-m-d' with an EXCLUSIVE end — the same shape the bars were
+             | shipped in, so no +1 happens anywhere on this path. Measured in the
+             | browser, 2026-08-12.
+             |
+             | THE SERVER IS THE TRUTH, not this optimistic bar. FullCalendar has
+             | already redrawn the bar by the time this runs; the refresh that
+             | saveDays/deleteDays trigger replaces `events` AND `eventBars`, and
+             | the $watch further down rebuilds the grid from the latter. So if the
+             | write came out differently the grid corrects itself, exactly as the
+             | modal path does.
+             |
+             | NO OVERLAP GUARD IN HERE, and that is a measurement rather than an
+             | omission. `eventOverlap: false` above already refuses a resize onto
+             | days another bar holds — FullCalendar validates the mutated range
+             | against the other events before it fires this callback
+             | (isInteractionPropsValid, @fullcalendar/core internal-common.js:6544)
+             | and reverts silently when it fails. Measured 2026-08-12 against the
+             | real component, all three with the same gesture that works on a free
+             | day as the control:
+             |   FR end  -> a day IT holds        refused, 0 rows changed, no call
+             |   IT start-> a day FR holds        refused, 0 rows changed, no call
+             |   FR end  -> another FR run        refused, 0 rows changed, no call
+             |   IT end  -> a FREE day (control)  written, saveDays on the wire
+             | So a drag can never take days off another country without saying so,
+             | which is the property the modal's docket provides on its own path. An
+             | info.revert() here would be a second guard for a case that cannot
+             | arrive, and it would have to re-derive "who holds this day" from the
+             | year-scoped `events` — a second notion of occupancy next to the one
+             | the calendar already applies.
+             |
+             | NO COUNTRY, NO WRITE. `country` is null for a bar projected from a
+             | row that carries a time part (reachable, measured — see the bar
+             | projection in calendar.blade.php), and saveDays would then stamp
+             | those days with an empty country. Reverting is the honest answer: the
+             | days keep the country they have, and nothing is invented.
+             */
+            eventResize: (info) => {
+                const {added, removed} = resizeDelta(
+                    info.oldEvent.startStr,
+                    info.oldEvent.endStr,
+                    info.event.startStr,
+                    info.event.endStr,
+                );
+
+                const country = info.event.extendedProps.country;
+
+                // NOTHING TO INSTRUCT -> UNDO THE OPTIC. resizeDelta() is
+                // fail-closed: an unusable date on any of the four slots yields two
+                // empty sets rather than a guess (a plain set difference would read
+                // as "delete the whole stay" or "write one out of nothing"). If we
+                // returned here without reverting, the bar would sit visually
+                // resized against an unchanged database until the next refresh —
+                // the one state this plan has spent four phases removing. Not
+                // reachable today (a zero-day resize fires no callback and
+                // startStr/endStr are always padded date strings), which is exactly
+                // why it is written down instead of relied upon.
+                if (!added.length && !removed.length) {
+                    info.revert();
+
+                    return;
+                }
+
+                // A bar can carry country: null when a stored day has a time part,
+                // so the year query excludes it while the projection does not. It
+                // may still SHRINK — deleting needs no country, and the days it
+                // removes are the ones the user just dragged away.
+                if (added.length && !country) {
+                    info.revert();
+
+                    return;
+                }
+
+                if (removed.length) livewireComponent.call('deleteDays', removed);
+                if (added.length) livewireComponent.call('saveDays', added, country);
             },
             datesSet: function (dateInfo) {
                 // Month grids bleed into the neighbouring month/year, so the first

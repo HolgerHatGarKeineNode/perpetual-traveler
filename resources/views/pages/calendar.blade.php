@@ -338,10 +338,30 @@ $refreshEventBars = protect(function () {
 $deleteDays = function ($days) {
     $currentYear = $this->currentYear ?? now()->year;
 
-    // delete each day in the database
+    /*
+     | THE DAY LIST IS THE INSTRUCTION — and it used to be second-guessed. This
+     | query carried the displayed year as two extra bounds on top of the
+     | whereIn, and the effect was silent data left behind rather than data
+     | protected: a stay crossing New Year is ONE stay here (App\Support\
+     | ContiguousStays; its bar spans the boundary in the grid), so a cross-year
+     | day list is ordinary input — from "Clear these days" over a selection that
+     | began in December, and from pulling such a bar's edge back. The half
+     | outside the year on screen was dropped without a word. Measured on bda7949
+     | against the real component, 2026-08-12: deleteDays(['2027-01-01',
+     | '2027-01-02']) with currentYear 2026 deleted NOTHING, all four days stayed.
+     | Pre-existing, not a P5 regression, and it hit the modal path already.
+     |
+     | The bound was also the one asymmetry between the two write directions:
+     | saveDays() below has never had it and writes across the year (measured the
+     | same day), so the same list could be written and then not taken back.
+     |
+     | What actually fences this query is the user scope plus the explicit day
+     | list, both still here. The year belongs on the RELOAD underneath, which is
+     | a statement about the grid and not about the write.
+     | Pinned from four sides in tests/Feature/CalendarDeleteAcrossYearsTest.php,
+     | including that the wider delete stays inside one user's rows.
+     */
     Event::query()
-        ->where('day', '>=', $currentYear . '-01-01')
-        ->where('day', '<=', $currentYear . '-12-31')
         ->where('user_id', auth()->id())
         ->whereIn('day', $days)
         ->delete();

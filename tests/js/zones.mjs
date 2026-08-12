@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 /*
- | Runs tests/js/ptrDays.test.js once per timezone.
+ | Runs every tests/js/*.test.js once per timezone.
+ |
+ | It GLOBS since 2026-08-12 instead of naming one file, and that is a guard, not
+ | tidiness: ptrResize.test.js was added that day and would have sat outside the
+ | matrix without a single test turning red — the ambient script in package.json
+ | already globs, so the two runners would have disagreed about what "the suite"
+ | is, and only the weaker one would have been visible. A new test file is now in
+ | the matrix by existing. node --test takes several paths and prints ONE
+ | aggregate summary, so the tally below still parses, and it exits non-zero if
+ | ANY file in ANY zone fails, which is what the composer gate hangs on.
  |
  | WHY THIS EXISTS AS A SEPARATE RUNNER — and read this carefully, because the
  | obvious reason is no longer the true one. The derivation does NOT read local
@@ -53,10 +62,25 @@
  */
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {readdirSync} from 'node:fs';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const testFile = path.join(here, 'ptrDays.test.js');
+
+// Sorted so the run order is the same on every machine and in every zone; a
+// matrix whose output order depends on the filesystem is harder to diff.
+const testFiles = readdirSync(here)
+    .filter((name) => name.endsWith('.test.js'))
+    .sort()
+    .map((name) => path.join(here, name));
+
+if (!testFiles.length) {
+    // Fail loudly rather than reporting 11 green zones over nothing at all: this
+    // script is the repo's only gate against the timezone class of defect, and
+    // `node --test` with no file argument exits 0.
+    process.stderr.write(`no *.test.js found in ${here}\n`);
+    process.exit(1);
+}
 
 const zones = [
     'UTC',
@@ -107,7 +131,7 @@ const zones = [
 const results = [];
 
 for (const zone of zones) {
-    const run = spawnSync(process.execPath, ['--test', testFile], {
+    const run = spawnSync(process.execPath, ['--test', ...testFiles], {
         env: {...process.env, TZ: zone},
         encoding: 'utf8',
     });

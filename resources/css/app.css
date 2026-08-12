@@ -707,6 +707,178 @@
 }
 
 /* =========================================================================
+   THE GRIP — the finished edge, while you are about to move it.
+
+   WHY IT IS THE CAP AND NOT A NEW MARK. A resize handle needs a form, and the
+   band's two ends are already spoken for: the ink cap means "the stay ends
+   here". Adding a second mark there would put two statements in 4px, and
+   re-using the cap's own form for a second meaning is the same mistake from the
+   other side. Neither is necessary, because the two facts are ONE fact in this
+   grid: FullCalendar draws a cap from .fc-event-start/.fc-event-end, and it
+   renders a resizer from seg.isStart/seg.isEnd (computeSegStartResizable /
+   computeSegEndResizable, @fullcalendar/core internal-common.js:4385-4390) —
+   the same two booleans. A cut edge has no cap and cannot be dragged; a
+   terminus has both. So the grip is not an addition, it is the STATE of the cap
+   that says "and this one you can pull": the 2px navy terminus becomes a 4px
+   gold one under the pointer, and goes back when the pointer leaves.
+
+   WHY GOLD, when the cap is deliberately not: gold in this file means "the
+   thing you are about to act on" — the today tint, the selection wash, the
+   selection rails, the focus ring, the day cursor. A hovered grip is exactly
+   that, so it joins a meaning instead of adding one. The OTHER gold mark on this
+   band is the day cursor, and the two are told apart by FORM rather than by
+   colour: the cursor is a hollow 2px box one day wide that comes with keyboard
+   focus, the grip a filled 4px bar at the very edge that comes with the pointer.
+   They can be on screen at once — a mouse resting on a grip while the bar holds
+   keyboard focus — and where the cursor stands on the very day a grip is drawn on
+   they coincide. Checked rather than argued away (screenshot, both schemes,
+   2026-08-12): the fill sits inside the box's border and the two read as one
+   heavier gold edge. It cannot mislead, because both marks say the same thing
+   about the same day, and it takes two input devices aimed at one day to make.
+
+   VISIBLE ON HOVER, LIVE ALWAYS, and that split is forced rather than chosen.
+   FullCalendar reveals its resizers with `.fc-event:hover .fc-event-resizer`,
+   which can never match here: P4 put pointer-events: none on .fc-event, and an
+   element that takes no pointer is never :hover. A display:none handle also
+   cannot be hovered into existence — that is the deadlock the coordinator
+   measured as "resizers exist, 0x0". So the hit area is present at all times
+   (that is what makes the pointer reach it) and only its INK is hover-bound.
+   That is how a resizable edge behaves everywhere — a window edge, a table
+   column, a split pane — and the ew-resize cursor is the second half of the
+   affordance. The function is not hover-only in any case: clicking the day and
+   picking a country, or the day cursor plus Enter, reach the same result and are
+   the primary path.
+
+   THE HIT AREA IS 8px AND STOPS THERE, because it is taken away from something.
+   P4's rule passes the pointer through the whole band so every stamped day can
+   start a date selection at any height; these 8px take that back at the two
+   terminal edges. 8px of a 64,09px cell, inside the band's ~17px of a 60,39px
+   cell — about 3% of that cell's area, and what happens there instead is the
+   more specific act. Deliberately NOT widened vertically beyond the band: a
+   handle reaching above or below it would cover cell area where P4's drag has to
+   keep working, and it would do so invisibly.
+
+   Touch never sees any of this: eventDurationEditable is false on the phone
+   (nostrCal.js), so no resizer element is rendered at all — an 8px control with
+   no hover state on a 47px cell would be a worse offer than the modal that is
+   already there, and it would compete with the touch-action: none selection.
+
+   Contrast as a graphical object (1.4.11, 3:1), composited through both alphas,
+   against the band's wash and the bare cell on all four grounds a day can take:
+     light  gold-600 -> 4,75 · 4,37 · 4,16 · 3,89 on the wash
+                        5,35 · 4,91 · 4,67 · 4,36 on the cell
+     dark   gold-400 -> 7,79 · 5,58 · 5,09 · 3,76 on the wash
+                        9,14 · 6,72 · 6,12 · 4,44 on the cell
+   ========================================================================= */
+.fc-event {
+    /* The resizers are absolutely positioned children, and this makes the event
+       box provably their containing block instead of whatever positioned
+       ancestor the theme happens to offer. No z-index, so no new stacking
+       context and nothing about the band's paint order changes. */
+    position: relative;
+}
+
+.fc-event .fc-event-resizer {
+    /* FullCalendar hides these and reveals them on .fc-event:hover, which cannot
+       match while the band passes the pointer through — see above. */
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    /* 8px, from the spacing scale and the same value FullCalendar's own
+       --fc-event-resizer-thickness carries, so the pointer target does not
+       depend on which of the two rules wins (theirs does: 0,3,0 against 0,2,0). */
+    width: 8px;
+    z-index: 4;
+    /* THE ONE EXCEPTION to the band's pointer-events: none. Nothing else inside
+       .fc-event takes the pointer back, so a drag out of the band's middle still
+       becomes a date selection. */
+    pointer-events: auto;
+}
+
+/* The ink, drawn as a pseudo-element over the cap rather than by changing the
+   cap's own border-width: a border that grows moves the band's content, and
+   4px of shifted flag is more noticeable than the grip itself. 4px wide against
+   the cap's 2px, so the edge reads as thicker, and squared off at the inner side
+   only — the outer corners keep the cap's radius, because the edge is still
+   finished while you hold it. */
+.fc-event .fc-event-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--color-gold-600);
+    opacity: 0;
+    /* 150ms ease-out, the appear-fast end of this system's range. No local
+       prefers-reduced-motion block: the global reset at the top of this file
+       already forces transition-duration to 0.001ms with !important on * and both
+       pseudo-elements, so a local one could not win and would only look like a
+       guarantee. Checked rather than assumed. */
+    transition: opacity 150ms ease-out;
+}
+
+.fc-event .fc-event-resizer:hover::after,
+.fc-event .fc-event-resizer:active::after {
+    opacity: 1;
+}
+
+/* INSIDE THE BAR, and the !important is what makes it so. FullCalendar centres
+   its handles ON the edge — `left: calc(var(--fc-event-resizer-thickness) *
+   -.5)`, i.e. -4px, at specificity 0,4,0
+   (.fc-direction-ltr .fc-h-event:not(.fc-event-selected) .fc-event-resizer-start),
+   which no plain .fc-event descendant selector can outrank. Measured on the
+   default: the start handle sat at x 73,19 against an event box at 77,19, so 4 of
+   its 8px lay over the NEIGHBOURING day — a day this stay does not own, whose
+   cell has to keep starting a date selection at every height (P4). 4 x 16,41px is
+   little, but it is little in someone else's cell, and invisible. Pulled flush
+   with the event box instead: the 8px then cover the 2px gutter, the 2px cap and
+   4px of the band, all of them the stay's own.
+   The house style for overriding FullCalendar geometry in this file is
+   !important (see the chrome reset at the top of this section), so it is that and
+   not a specificity race that would break on their next class name. */
+.fc-event .fc-event-resizer-start {
+    left: 0 !important;
+    right: auto !important;
+    /* The fallback only. FullCalendar's own w-resize/e-resize is more specific
+       and wins at rest (measured: w-resize on the start handle, e-resize on the
+       end one), which is the better signal anyway — it names the direction. This
+       carries the selected state, where their rule does not apply. */
+    cursor: ew-resize;
+}
+
+.fc-event .fc-event-resizer-start::after {
+    left: 2px;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.fc-event .fc-event-resizer-end {
+    right: 0 !important;
+    left: auto !important;
+    cursor: ew-resize;
+}
+
+.fc-event .fc-event-resizer-end::after {
+    right: 2px;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+/* FullCalendar turns a SELECTED event's resizers into 8px round dots that sit
+   outside the box (the touch pattern). Unreachable here — the band takes no
+   pointer, so no pointer can select an event — and overridden anyway, so the
+   grip cannot grow a second appearance if a future path does select one. */
+.fc-event-selected .fc-event-resizer {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    width: 8px;
+    height: auto;
+    margin: 0;
+}
+
+/* =========================================================================
    THE DAY CURSOR — where the keyboard stands inside a stay.
    Tab reaches a bar, the arrow keys walk its days (nostrCal.js), and this is
    the mark that says which day Enter would open. It exists because the bar
@@ -857,6 +1029,12 @@
        measured reason: gold-600 is too dark to read as a mark on navy-900. */
     .ptr-stay-cursor {
         border-color: var(--color-gold-400);
+    }
+
+    /* The grip takes the same inversion, for the same reason and from the same
+       token — the two gold marks stay one palette. */
+    .fc-event .fc-event-resizer::after {
+        background: var(--color-gold-400);
     }
 }
 

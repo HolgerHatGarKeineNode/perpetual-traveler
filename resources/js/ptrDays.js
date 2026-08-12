@@ -126,3 +126,76 @@ export function rangeDays(startIso, endIsoExclusive) {
 
     return days;
 }
+
+/*
+ | THE RETURN PATH OF A RESIZE — "the user pulled an edge, what has to be
+ | written?" — as the two write instructions of that drag:
+ |
+ |   added   -> saveDays(added, country)   the days the new range covers and the
+ |                                          old one did not
+ |   removed -> deleteDays(removed)         the days the old range covered and the
+ |                                          new one does not
+ |   neither -> every day BOTH cover. An unchanged day must not be re-stamped and
+ |              must above all not be deleted.
+ |
+ | It COMPOSES rangeDays() rather than walking days itself, and that is the whole
+ | reason it lives in this file: a third walk over "which days does a span cover"
+ | is exactly the second derivation the header above argues against. Both lists
+ | therefore inherit the walk's guarantees for free — ascending, 'YYYY-MM-DD',
+ | Gregorian month lengths and leap days from the converter, and no local getter
+ | anywhere in the chain, so the traveller's timezone cannot shift a day. `filter`
+ | preserves the walk's order, which is what keeps `added` ONE ascending list even
+ | when it spans a gap (both edges grown at once: two days at the front, two at
+ | the back, one list).
+ |
+ | WHY THE INPUT CHECK IS NOT MERELY DEFENSIVE — the fail-closed direction here
+ | is not the same one as in rangeDays(), and getting it wrong costs data:
+ | rangeDays() answers [] for "nothing marked" AND for "not a calendar date"
+ | alike, and those two are not distinguishable afterwards. A plain set difference
+ | over two such results turns that [] into an INSTRUCTION:
+ |
+ |   new range unusable -> after  = [] -> removed = every day of the stay
+ |   old range unusable -> before = [] -> added   = every day of the new range
+ |
+ | The first deletes a whole stay because of one malformed string, the second
+ | writes one out of nothing — both fail-OPEN in precisely the direction that
+ | destroys residency days. So an unusable range on ANY of the four slots yields
+ | NO instruction. A caller that really means "drop this stay" has to say so; the
+ | modal's own delete path is what that is for.
+ |
+ | The check is `before`/`after` being empty and nothing more, and that is exact
+ | rather than convenient: rangeDays() returns [] for every unusable input there
+ | is — falsy, non-string, unpadded, a time part, a normalising nonsense date, a
+ | year Date.UTC moves into the 20th century — and also for the two degenerate
+ | ranges (end === start, and end before start), because its walk runs
+ | `n < bound`. One condition, no second notion of "usable" that could drift from
+ | the walk's own.
+ |
+ | Unreachable from today's UI, and kept for the next caller: FullCalendar refuses
+ | a resize to zero days without firing the callback, and startStr/endStr are
+ | always padded, date-only strings (measured in the browser, 2026-08-12).
+ |
+ | Pinned by tests/js/ptrResize.test.js, which runs under every zone of
+ | tests/js/zones.mjs.
+ |
+ | @param {string|false|null|undefined} oldStart           first day of the stay before the drag
+ | @param {string|false|null|undefined} oldEndExclusive    day AFTER its last day
+ | @param {string|false|null|undefined} newStart           first day after the drag
+ | @param {string|false|null|undefined} newEndExclusive    day AFTER its last day
+ | @returns {{added: string[], removed: string[]}} ascending 'YYYY-MM-DD'; both
+ |          empty if any slot is not a usable range
+ */
+export function resizeDelta(oldStart, oldEndExclusive, newStart, newEndExclusive) {
+    const before = rangeDays(oldStart, oldEndExclusive);
+    const after = rangeDays(newStart, newEndExclusive);
+
+    if (!before.length || !after.length) return {added: [], removed: []};
+
+    const beforeDays = new Set(before);
+    const afterDays = new Set(after);
+
+    return {
+        added: after.filter((day) => !beforeDays.has(day)),
+        removed: before.filter((day) => !afterDays.has(day)),
+    };
+}
