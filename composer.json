@@ -77,6 +77,11 @@
         "browser:capture-references": [
             "Composer\\Config::disableProcessTimeout",
             "vendor/bin/pest tests/Browser/ReferenceCapture.php --no-tia"
+        ],
+        "audit:all": [
+            "Composer\\Config::disableProcessTimeout",
+            "@composer audit",
+            "yarn npm audit --recursive"
         ]
     },
     "extra": {
