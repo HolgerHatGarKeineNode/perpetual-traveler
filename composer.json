@@ -73,6 +73,10 @@
         ],
         "browser:setup": [
             "@php scripts/browser-setup.php"
+        ],
+        "browser:capture-references": [
+            "Composer\\Config::disableProcessTimeout",
+            "vendor/bin/pest tests/Browser/ReferenceCapture.php --no-tia"
         ]
     },
     "extra": {

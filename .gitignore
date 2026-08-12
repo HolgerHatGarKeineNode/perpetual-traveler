@@ -25,4 +25,9 @@ yarn-error.log
 /.codegraph
 /.playwright-mcp
 *.png
+# P4 (fullcalendar-7-umstieg): the four frozen v6 reference screenshots are
+# tracked on purpose -- everything else under tests/Browser/ (in particular
+# tests/Browser/Screenshots/, the ephemeral per-run output of every browser
+# test) stays covered by the *.png rule above.
+!/tests/Browser/References/*.png
 plans/
