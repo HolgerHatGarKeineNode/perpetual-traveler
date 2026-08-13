@@ -600,18 +600,20 @@ updated([
                             </div>
                         </div>
 
-                        {{-- THE DAY CURSOR, SPOKEN. Tab reaches a stay bar in the grid and
-                             the arrow keys walk its days (resources/js/nostrCal.js). The
-                             cursor mark is visual, so on its own it would make the walk
-                             operable but not perceivable — this region says the day out
-                             loud instead. It is the same division of labour the untracked
-                             sentence above uses: a texture in the grid, a sentence for
-                             anyone who cannot see it.
+                        {{-- THE DAY CURSOR, SPOKEN — for both of them. Tab reaches the grid
+                             and a stay bar; the arrow keys walk days either way
+                             (resources/js/nostrCal.js). The cursor mark is visual, so on its
+                             own it would make the walk operable but not perceivable — this
+                             region says the day out loud instead, and on a day cell it adds
+                             what the cell holds, which the cell's own name (FullCalendar's
+                             "March 10, 2026") does not say. It is the same division of
+                             labour the untracked sentence above uses: a texture in the grid,
+                             a sentence for anyone who cannot see it.
                              OUTSIDE wire:ignore on purpose, so Alpine owns its text; and
                              sr-only rather than hidden, because an aria-live region that is
-                             display:none is not announced at all. Empty until a bar is
-                             focused, so it says nothing on load. --}}
-                        <p class="sr-only" aria-live="polite" x-text="barCursorSpoken"></p>
+                             display:none is not announced at all. Empty until something in
+                             the grid is focused, so it says nothing on load. --}}
+                        <p class="sr-only" aria-live="polite" x-text="cursorSpoken"></p>
 
                         <div wire:ignore
                              x-show="tab === 'calendar'"
@@ -780,8 +782,18 @@ updated([
                          x-transition:leave-end="opacity-0"
                          @click="modalOpen=false"
                          class="absolute inset-0 w-full h-full bg-navy-950/70 backdrop-blur-sm"></div>
+                    {{-- .noreturn, because x-trap's own return focus is measurably wrong
+                         here and cannot be made right from the template: the trap
+                         activates on a 15ms timeout, by which time the country search
+                         below has already auto-focused itself on $nextTick — so the node
+                         focus-trap records as "focused before activation" is that search
+                         field, and on release it focuses a field that is display:none by
+                         then. The browser drops focus to BODY (measured on 6d7f51b and on
+                         8dd30f4 alike). nostrCal.js's $watch on modalOpen states the way
+                         back instead, keyed by the DAY the modal is about — see the block
+                         there for why an element reference cannot do that job. --}}
                     <div x-show="modalOpen"
-                         x-trap.inert.noscroll="modalOpen"
+                         x-trap.inert.noscroll.noreturn="modalOpen"
                          x-transition:enter="ease-out duration-300"
                          x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                          x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

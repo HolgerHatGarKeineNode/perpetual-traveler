@@ -1169,6 +1169,73 @@
         inset 0 -1px 0 0 var(--color-gold-600);
 }
 
+/* =========================================================================
+   THE GRID CURSOR — where the keyboard stands in the calendar itself.
+   The bar cursor further up walks the days of a STAY; this one walks the grid,
+   and it is what gives a keyboard a way to an UNSTAMPED day at all (WCAG 2.1.1
+   — before it, only the toolbar buttons and the stay bars were focusable, so a
+   keyboard could overwrite a day but never enter one).
+   THE MARK IS THE FOCUS INDICATOR, hence outline: none on the same cell — the
+   two are one thing and cannot come apart, exactly as with the bar cursor. It
+   replaces the app-wide gold-400 ring rather than sitting inside it, and that is
+   a repair as well as a shape: that ring reads 1,89:1 against the white card,
+   which is fine for 2.4.13 (AAA, not in force here) and thin for the one control
+   a keyboard user has to find in a 365-cell grid. The app-wide token is NOT
+   touched; only this cell says something better locally, with ink this file
+   already uses for "the thing you are about to act on".
+   Same two inks and the same four cell grounds as the selection rails above, so
+   the ratios are theirs — remeasured with the band's own tint on top, because
+   the cursor also stands on stamped days (1.4.11 asks 3:1 for a graphical
+   object; measured 2026-08-13, alpha composed explicitly):
+     light  gold-600 -> 5,35 card · 4,90 today · 4,66 wash · 4,34 today+wash
+                        4,73 / 4,36 / 4,16 / 3,87 with a band over each
+     dark   gold-400 -> 9,14 · 6,74 · 6,14 · 4,42
+                        7,78 / 5,62 / 5,10 / 3,73 with a band over each
+   Worst case 3,87 light / 3,73 dark. Where a guilloche line crosses the box the
+   local ground is that line (gold-600 on navy-500@50% = 2,29:1) — the box stays
+   a closed rectangle over ≥3,87:1 for the rest of its length, and the shipped
+   selection rails already cross the same lines the same way.
+   :focus-visible and not :focus, unlike the bar cursor: a day cell CAN be
+   clicked, and a pointer user who has just clicked a day does not need a ring
+   around it.
+   THE BOX HANGS ON THE CELL AND NOT ON `.fc-daygrid-day-frame`, which was the
+   first attempt and is a trap: FullCalendar puts a CLEARFIX on that element's
+   two pseudo-elements (`.fc-daygrid-day-frame:after{clear:both;content:"";
+   display:table}`, daygrid/internal.js:985, injected at runtime). A rule that
+   only adds position/inset/border keeps that `display: table` — and an
+   absolutely positioned TABLE shrink-wraps its content instead of stretching to
+   its containing block. Measured: the box came out 4px tall in a 51,95px cell,
+   i.e. its own two borders. Overriding the display would work but would take the
+   clearfix away from a focused cell only, so the cell could change height when
+   the keyboard arrives. `.fc-daygrid-day` carries no vendor pseudo-element (the
+   injected clearfix list names day-frame, day-events, day-bottom and
+   event-harness, not the cell), so nothing is being borrowed here.
+   `position: relative` on the cell is what makes inset 0 the cell; it adds no
+   offset, no z-index and therefore no stacking context, and the bands and
+   backgrounds keep resolving against the frame inside it, which is nearer.
+   z-index 6 puts the mark over the day number (4) and the highlight (3) and
+   level with the bands, where being the later element in paint order wins.
+   pointer-events: none is load-bearing rather than tidy: the whole selection
+   interaction rests on the cell taking the pointer (see the eventClick block in
+   nostrCal.js).
+   ========================================================================= */
+.fc .fc-daygrid-day:focus-visible {
+    outline: none;
+    position: relative;
+}
+
+.fc .fc-daygrid-day:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--color-gold-600);
+    /* Square, like the bar cursor: it marks a cell of the grid, and the grid has
+       no rounded cells. */
+    border-radius: 0;
+    z-index: 6;
+    pointer-events: none;
+}
+
 /* THE BLEED CELLS — the days of the neighbouring month that fill out the first
    and last week of `dayGridMonth`. Reachable on the phone only (the year grid
    sets showNonCurrentDates false, multimonth/index.js:236); on the phone it is
@@ -1314,6 +1381,14 @@
             inset -2px 0 0 0 var(--color-gold-400),
             inset 0 1px 0 0 var(--color-gold-400),
             inset 0 -1px 0 0 var(--color-gold-400);
+    }
+    /* The grid cursor takes the same inversion as the rails and the bar cursor,
+       for the same measured reason: gold-600 is 3,23:1 on navy-900 and 1,57:1 on
+       today+wash, so it would fail 1.4.11 on the very cell the user is on.
+       gold-400 gives 9,14 · 6,74 · 6,14 · 4,42 over the four grounds, and
+       7,78 / 5,62 / 5,10 / 3,73 with a band over each. */
+    .fc .fc-daygrid-day:focus-visible::after {
+        border-color: var(--color-gold-400);
     }
     .ptr-untracked-swatch {
         border-color: color-mix(in srgb, var(--color-navy-300) 35%, transparent);

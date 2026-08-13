@@ -2,7 +2,7 @@ import {Calendar} from '@fullcalendar/core'
 import multiMonthPlugin from '@fullcalendar/multimonth'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction';
-import {rangeDays, resizeDelta} from './ptrDays.js';
+import {rangeDays, resizeDelta, shiftDay} from './ptrDays.js';
 import {localISODate} from './localISODate.js';
 
 export default (livewireComponent) => ({
@@ -30,12 +30,19 @@ export default (livewireComponent) => ({
      | focus to the neighbouring segment of the same stay, so the whole run is one
      | continuous walk: exactly the "one journey" the bar claims visually.
      |
-     | `barCursorDay` is what Enter opens; `barCursorSpoken` is what the live
-     | region next to the grid says, because the visible cursor is no use to a
-     | screen reader and the bar's own label cannot re-announce itself.
+     | It answered half of WCAG 2.1.1 and only half: a bar exists where days are
+     | already STAMPED, so the keyboard could overwrite but not enter — an unused
+     | day had no tab stop anywhere in the grid (measured on 8dd30f4 and on
+     | 6d7f51b alike). The GRID CURSOR further down is the other half; between
+     | them every day of the displayed range is reachable.
+     |
+     | `barCursorDay` is what Enter opens while a bar has focus; `cursorSpoken` is
+     | what the live region next to the grid says, and it serves BOTH cursors —
+     | the visible mark is no use to a screen reader, and neither the bar's own
+     | label nor the day cell's can re-announce itself.
      */
     barCursorDay: null,
-    barCursorSpoken: '',
+    cursorSpoken: '',
 
     // DAY-WISE, and it stays that way: one entry per tracked day of the
     // displayed year. Nothing in the grid reads it any more, but every COUNTING
@@ -116,6 +123,107 @@ export default (livewireComponent) => ({
         // Where the day cursor stands right now. Declared here because eventClick
         // reads it; it is filled by the keyboard wiring after render() below.
         const cursor = {el: null, days: [], index: 0};
+
+        /*
+         | THE MEMORY OF THE WALK, keyed by the STAY instead of by the DOM node.
+         |
+         | The cursor used to remember its day only while the same element kept
+         | being focused (`eventEl === cursor.el ? cursor.index : 0`), and on the
+         | path a keyboard user actually takes that is no memory at all: Escape
+         | hands focus back to the document, the user tabs in again from the
+         | front, and EVERY bar passed on the way reset its own index to 0 —
+         | 03-06 came back as 03-02 (measured by the reviewer). Node identity is
+         | the wrong key for a second reason too: a bar is a new element after
+         | any re-render.
+         |
+         | So the key is the stay's own range, `from|to`, the same pair
+         | segmentsOfBar() identifies siblings by and unique per stay for the same
+         | reason (the unique index on (user_id, day)). One entry per stay, and
+         | passing a bar without moving its cursor does not write to it.
+         */
+        const barMemory = new Map();
+
+        /*
+         | THE GRID CURSOR — one tab stop for the whole grid, and the answer to
+         | "how does a keyboard reach a day that carries nothing".
+         |
+         | FullCalendar already renders the grid as an ARIA grid: role="grid" on
+         | each month (multimonth/index.js:25), role="row" on the rows, and every
+         | day cell a `td[role="gridcell"]` whose accessible name is maintained by
+         | the library itself (`aria-labelledby` -> the day number's own
+         | `aria-label`, e.g. "March 10, 2026" — buildNavLinkAttrs' non-navLink
+         | branch, core internal-common.js:5484). What is missing from that
+         | pattern is exactly one thing: a roving tabindex and the keys to move
+         | it. This is that, and nothing more — no label bookkeeping, no injected
+         | nodes, no second source for anything the library already states.
+         |
+         | THE WHOLE COST IS ONE ATTRIBUTE ON ONE ELEMENT. Not 365 of them: every
+         | other cell keeps FullCalendar's default of no tabindex at all, so the
+         | grid gains ONE tab stop, not one per day. That the tab order stays
+         | short is the point — 365 stops would be a worse answer than none.
+         |
+         | Measured against the two things that could have made this expensive
+         | (2026-08-13, the year grid at 1280px, 365 day cells of 504 cells):
+         |   - a setOption-driven re-render KEEPS the cell nodes and every
+         |     attribute set on them: 365/365 td, 504/504 day numbers, and an
+         |     imperative tabIndex survived on 504/504. So the option dance that
+         |     re-hatches the untracked days cannot lose the cursor.
+         |   - a real save through Livewire keeps them too, focus included: the
+         |     focused cell was still the focused cell afterwards.
+         |   - a YEAR STEP replaces all of them (0/504 survive), which is why the
+         |     cursor is re-placed from datesSet rather than restored.
+         */
+        let gridDay = null;
+
+        /*
+         | WHAT THE MODAL IS ABOUT, so that closing it can put the keyboard back
+         | where it came from — by DAY, never by element. The element is exactly
+         | what is not dependable: a save re-renders the bars, so the node that
+         | opened the modal may not be the node that should receive focus back.
+         | `barKey` is null when the modal was opened on a day cell.
+         */
+        let modalReturn = null;
+
+        /*
+         | datesSet fires from INSIDE render() below, and the keyboard wiring is a
+         | set of consts declared after it — calling them from there would hit
+         | their temporal dead zone. So the option calls this stub, and the real
+         | placement is assigned once the wiring exists (and called once by hand
+         | for the first paint, which render() has already been through).
+         */
+        let onDatesSet = () => {};
+
+        /*
+         | ONE ENTRY TO THE MODAL for all three paths — a click on a day, Enter on
+         | a bar, Enter on the grid cursor — so that "which day is this about" is
+         | recorded in exactly one place and the way back cannot disagree with the
+         | way in.
+         |
+         | The range end is built from the day's COMPONENTS, which is what
+         | eventClick has always done: `new Date(iso)` is UTC midnight and reads
+         | back a day earlier west of UTC. dateClick used to build the same day
+         | from its own `info.date` object; that produced the identical string
+         | (both are local midnight of the same day, +1) and is now simply the
+         | same line. No new arithmetic on any write path: the day list the modal
+         | writes still comes from rangeDays().
+         */
+        const openDay = (day, barKey = null) => {
+            const [y, m, d] = day.split('-').map(Number);
+            const next = new Date(y, m - 1, d);
+            next.setDate(next.getDate() + 1);
+
+            modalReturn = {day, barKey};
+
+            // The grid cursor follows the last day acted on, whichever way it was
+            // reached — so Tab after a pointer edit lands where the user was
+            // working, and the way back after Escape has a cell to aim at even
+            // when the bar it came from is gone.
+            putGridCursor(day);
+
+            this.newEventStart = day;
+            this.newEventEnd = localISODate(next);
+            this.modalOpen = true;
+        };
 
         let untracked = new Set(this.untrackedDays ?? []);
         const makeDayCellClassNames = () => (arg) => (
@@ -284,13 +392,7 @@ export default (livewireComponent) => ({
              | worked. Narrow, invisible and undiscoverable. This rule makes the
              | whole cell draggable at every height, which is the actual repair.
              */
-            dateClick: (info) => {
-                const next = new Date(info.date);
-                next.setDate(next.getDate() + 1);
-                this.newEventStart = info.dateStr;
-                this.newEventEnd = localISODate(next);
-                this.modalOpen = true;
-            },
+            dateClick: (info) => openDay(info.dateStr),
             /*
              | KEYBOARD ACTIVATION OF A BAND — the only thing that reaches this.
              |
@@ -337,15 +439,10 @@ export default (livewireComponent) => ({
                     || info.el.closest('td[data-date]')?.getAttribute('data-date')
                     || localISODate(info.event.start);
 
-                // From the components, like rangeLabel() below: `new Date(iso)`
-                // is UTC midnight and reads back a day earlier west of UTC.
-                const [y, m, d] = day.split('-').map(Number);
-                const next = new Date(y, m - 1, d);
-                next.setDate(next.getDate() + 1);
-
-                this.newEventStart = day;
-                this.newEventEnd = localISODate(next);
-                this.modalOpen = true;
+                // The stay's own range travels with it, so closing the modal can
+                // find this bar again even though the element itself may not
+                // survive the write that happens in between.
+                openDay(day, barKeyOf(info.el));
             },
             /*
              | THE EDGE WAS PULLED — the whole write path of a correction, and the
@@ -439,6 +536,10 @@ export default (livewireComponent) => ({
                 // visible cell is unreliable; take the midpoint of the visible range.
                 const mid = new Date((dateInfo.start.getTime() + dateInfo.end.getTime()) / 2);
                 that.currentYear = mid.getFullYear();
+
+                // A navigation step replaces every day cell (measured: 0 of 504
+                // survive), so the grid cursor has to be put down again.
+                onDatesSet();
             },
         });
 
@@ -501,6 +602,16 @@ export default (livewireComponent) => ({
         // than order-dependent, not what prevented it) — pinned in
         // tests/Unit/ContiguousStaysGuardsTest.php, which reaches that state by
         // constructing it directly, the only way left to reach it at all.
+        // The stay a segment belongs to, as a string — see barMemory above for
+        // why this and not the element is the key.
+        const barKeyOf = (eventEl) => {
+            const band = bandOf(eventEl);
+
+            return band && band.dataset.from && band.dataset.to
+                ? `${band.dataset.from}|${band.dataset.to}`
+                : null;
+        };
+
         const segmentsOfBar = (eventEl) => {
             const band = bandOf(eventEl);
             if (!band) return [eventEl];
@@ -535,10 +646,18 @@ export default (livewireComponent) => ({
             cursor.days = [];
             cursor.index = 0;
             this.barCursorDay = null;
-            this.barCursorSpoken = '';
+            this.cursorSpoken = '';
         };
 
-        const putCursor = (eventEl, index) => {
+        /*
+         | `remember` is false for exactly one case, and it is not a nicety: the
+         | walk was left on a day in ANOTHER segment of this same stay (a stay is
+         | cut at every week boundary). Tabbing onto this segment then has to
+         | start at its own first day — but writing that day back would throw away
+         | the position the user actually left, and the next Tab onto the other
+         | segment would find it gone. Passing through is not moving.
+         */
+        const putCursor = (eventEl, index, remember = true) => {
             if (cursor.el && cursor.el !== eventEl) clearCursor();
 
             const days = daysOfSegment(eventEl);
@@ -553,10 +672,13 @@ export default (livewireComponent) => ({
             band.style.setProperty('--ptr-cursor', String(cursor.index));
 
             this.barCursorDay = days[cursor.index];
-            this.barCursorSpoken = spokenDay(
+            this.cursorSpoken = spokenDay(
                 this.barCursorDay,
                 band.querySelector('.ptr-stay-name')?.textContent ?? '',
             );
+
+            const key = barKeyOf(eventEl);
+            if (remember && key) barMemory.set(key, this.barCursorDay);
 
             return true;
         };
@@ -582,39 +704,221 @@ export default (livewireComponent) => ({
             if (putCursor(neighbour, delta > 0 ? 0 : days.length - 1)) neighbour.focus();
         };
 
+        /*
+         | THE GRID CURSOR — see the declaration of `gridDay` above for what it
+         | is and what it was measured to cost. Three functions and one attribute.
+         */
+        const cellOf = (iso) => (iso ? this.$refs.cal.querySelector(`td[data-date="${iso}"]`) : null);
+
+        const putGridCursor = (iso, focus = false) => {
+            const cell = cellOf(iso);
+            if (!cell) return false;
+
+            // Clearing by QUERY and not by remembered element: the element may
+            // have been replaced since, and a stale tabindex left behind would be
+            // a second tab stop nobody put there. Reading 504 cells costs nothing
+            // next to the keypress that triggered it.
+            this.$refs.cal.querySelectorAll('td[data-date][tabindex]')
+                .forEach((td) => td.removeAttribute('tabindex'));
+
+            cell.setAttribute('tabindex', '0');
+            gridDay = iso;
+
+            if (focus) cell.focus();
+
+            return true;
+        };
+
+        /*
+         | WHAT THE CELL IS, spoken. The cell's own accessible name is the date
+         | and nothing else (FullCalendar's, and it stays FullCalendar's), so the
+         | live region carries the state — computed at the moment of the step from
+         | the two live sources, never stored on the cell. That is what keeps it
+         | from going stale: `events` is the day-wise array every counting path
+         | reads, and the hatch class is the same one dayCellClassNames sets from
+         | the server's untracked list.
+         */
+        const speakGridDay = (iso) => {
+            const cell = cellOf(iso);
+
+            let name = '';
+            for (const event of (this.events ?? [])) {
+                if (String(event.start).slice(0, 10) === iso) {
+                    name = countryName(event.title);
+                    break;
+                }
+            }
+
+            if (!name && cell?.classList.contains('ptr-untracked')) name = 'no country';
+
+            this.cursorSpoken = spokenDay(iso, name);
+        };
+
+        const gridStep = (delta) => {
+            const next = shiftDay(gridDay, delta);
+
+            // shiftDay returns null for an unusable day, putGridCursor false for
+            // a day the displayed view does not contain (the edges of the year,
+            // and both ends of the month grid). Either way the cursor stays put
+            // rather than guessing — prev/next are two tab stops away.
+            if (!putGridCursor(next, true)) return;
+
+            speakGridDay(next);
+        };
+
+        /*
+         | WHERE THE CURSOR STANDS AFTER A RENDER. Today when the view holds it,
+         | because that is the day a calendar is about; otherwise the first day of
+         | the view, so the grid always has exactly one tab stop. Trying the
+         | previous day first keeps the position across a re-render that did not
+         | move the view.
+         */
+        onDatesSet = () => {
+            if (putGridCursor(gridDay)) return;
+            if (putGridCursor(localISODate(new Date()))) return;
+
+            const first = this.$refs.cal.querySelector('td[data-date]');
+            if (first) putGridCursor(first.getAttribute('data-date'));
+        };
+
+        onDatesSet();
+
         this.$refs.cal.addEventListener('focusin', (event) => {
             const eventEl = event.target.closest('.fc-event');
             if (!eventEl) return;
 
-            // Coming back to the SAME bar keeps the day it was left on. That is
-            // the common path and not a nicety: opening the modal moves focus into
-            // it (x-trap), so resetting here would send a keyboard user back to
-            // day one of the stay after every single edit. A bar that was
-            // re-rendered in between is a different element, so it starts at its
-            // first day — which is what Enter alone did before the cursor existed.
-            putCursor(eventEl, eventEl === cursor.el ? cursor.index : 0);
+            // The day this stay was left on, whatever happened in between —
+            // Escape, a tab through every other bar, a re-render. See barMemory
+            // above; before it, this was `eventEl === cursor.el ? cursor.index : 0`
+            // and any of those three lost the position.
+            const key = barKeyOf(eventEl);
+            const remembered = key ? barMemory.get(key) : null;
+            const hit = remembered ? daysOfSegment(eventEl).indexOf(remembered) : -1;
+
+            putCursor(eventEl, hit >= 0 ? hit : 0, hit >= 0 || !remembered);
         });
 
         this.$refs.cal.addEventListener('focusout', (event) => {
-            // relatedTarget is where focus is going; staying inside the same band
-            // must not wipe anything.
-            if (event.relatedTarget && event.relatedTarget.closest?.('.fc-event')) return;
+            // relatedTarget is where focus is going; moving from a bar to a cell
+            // or between cells must not wipe anything — the next step speaks for
+            // itself.
+            if (event.relatedTarget && this.$refs.cal.contains(event.relatedTarget)) return;
 
-            // The cursor keeps its POSITION (see focusin) but stops speaking: a
-            // live region that still names a day nobody is standing on would be
-            // read out at the next unrelated update.
-            this.barCursorSpoken = '';
+            // Both cursors keep their POSITION but stop speaking: a live region
+            // that still names a day nobody is standing on would be read out at
+            // the next unrelated update.
+            this.cursorSpoken = '';
         });
 
+        /*
+         | THE KEYS. Two focusables, one meaning per key: the arrows walk days.
+         |
+         | ARROWUP/ARROWDOWN ARE INTERCEPTED, which they deliberately were not
+         | before this phase. The old reasoning still holds and is what changed:
+         | without grid navigation they had no replacement, so taking the page
+         | scroll away would have been a loss; with it they are the row step the
+         | grid has always implied — seven days, one calendar row (firstDay: 1).
+         | On a BAR they hand over to the grid cursor at the same offset, because
+         | a stay has no rows of its own and a key that means two different things
+         | depending on where the focus sits is worse than either meaning.
+         | Nothing else in the calendar is intercepted: PageUp/PageDown, Home/End
+         | and the space bar outside the grid keep scrolling the page.
+         */
         this.$refs.cal.addEventListener('keydown', (event) => {
-            if (!cursor.el || !event.target.closest('.fc-event')) return;
+            if (event.altKey || event.ctrlKey || event.metaKey) return;
 
-            const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+            const week = event.key === 'ArrowDown' ? 7 : event.key === 'ArrowUp' ? -7 : 0;
+
+            if (event.target.closest('.fc-event')) {
+                if (!cursor.el) return;
+
+                const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+
+                if (delta) {
+                    event.preventDefault();
+                    step(delta);
+
+                    return;
+                }
+
+                if (week) {
+                    event.preventDefault();
+
+                    const next = shiftDay(this.barCursorDay, week);
+                    if (putGridCursor(next, true)) speakGridDay(next);
+                }
+
+                return;
+            }
+
+            // Focus is ON the cell itself — the roving tabindex sits there and
+            // nowhere else, so this cannot be a keystroke bubbling out of some
+            // other control inside the grid.
+            const cell = event.target.closest?.('td[data-date]');
+            if (!cell || event.target !== cell) return;
+
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openDay(cell.getAttribute('data-date'));
+
+                return;
+            }
+
+            const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : week;
             if (!delta) return;
 
-            // Otherwise the grid scrolls under the cursor.
             event.preventDefault();
-            step(delta);
+            gridStep(delta);
+        });
+
+        /*
+         | THE WAY BACK OUT OF THE MODAL — WCAG 2.4.3, and it was broken for every
+         | path into it, not just the keyboard one: focus landed on BODY.
+         |
+         | The cause is a race between two things that both want to place focus.
+         | The country list auto-focuses its search field on $nextTick
+         | (calendar.blade.php, x-effect), while Alpine's x-trap activates on a
+         | 15ms timeout (livewire.esm.js: `setTimeout(() => trap.activate(), 15)`)
+         | — so by the time focus-trap records "the node focused before
+         | activation" it records the SEARCH FIELD, not the day or the bar the
+         | user came from. On release it dutifully focuses that field again; the
+         | modal is display:none by then, focusing a non-rendered element is a
+         | no-op, and the browser drops focus to BODY. Measured on 6d7f51b and on
+         | 8dd30f4: activeElement inside the modal is the search input, and after
+         | Escape it is BODY while the input is still in the DOM with a null
+         | offsetParent.
+         |
+         | So the trap is told not to return focus at all (`.noreturn` in the
+         | template) and the way back is stated here, by DAY: the modal is about a
+         | day, and when it closes the keyboard stands on that day. That holds for
+         | the case the node-based approach cannot serve at all — the bar that
+         | opened the modal has been re-rendered by the write, or has stopped
+         | existing because its days went somewhere else.
+         */
+        this.$watch('modalOpen', (open) => {
+            if (open || !modalReturn) return;
+
+            const {day, barKey} = modalReturn;
+            modalReturn = null;
+
+            this.$nextTick(() => {
+                const segment = barKey
+                    ? [...this.$refs.cal.querySelectorAll('.fc-event')].find(
+                        (el) => barKeyOf(el) === barKey && daysOfSegment(el).includes(day),
+                    )
+                    : null;
+
+                if (segment) {
+                    // Set before focusing, so the focusin handler above puts the
+                    // cursor back on the day the modal was opened for.
+                    barMemory.set(barKey, day);
+                    segment.focus();
+
+                    return;
+                }
+
+                if (putGridCursor(day, true)) speakGridDay(day);
+            });
         });
 
         // The grid follows the BARS, and only the bars. Watching `events` here

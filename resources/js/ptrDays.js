@@ -63,56 +63,66 @@
  */
 const MS_PER_DAY = 86_400_000;
 
+const pad = (n) => String(n).padStart(2, '0');
+
+/*
+ | An ordinal back to its calendar date. AT MODULE SCOPE, not inside rangeDays(),
+ | so that shiftDay() below shares this exact converter instead of carrying a
+ | second one — the same reason resizeDelta() composes rangeDays() rather than
+ | walking days itself. Neither function closes over anything, so lifting them
+ | out is a move and not a change.
+ |
+ | The year is padded to FOUR digits, and that is load-bearing rather than
+ | cosmetic: ordinal() below accepts a string only if isoOf() renders it back
+ | identically, so an unpadded year here silently rejects every year under 1000 —
+ | measured 2026-08-11, '0990-01-01' rendered as '990-01-01' and 657 434
+ | previously correct inputs turned into [].
+ */
+const isoOf = (n) => {
+    const d = new Date(n * MS_PER_DAY);
+
+    return `${String(d.getUTCFullYear()).padStart(4, '0')}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+};
+
+/*
+ | 'YYYY-MM-DD' -> that day's ordinal, or NaN if the string is not a calendar
+ | date. The round trip is the whole check, and it is not decoration: Date.UTC
+ | NORMALISES silently instead of rejecting, so without it this function
+ | invents days out of nonsense (all measured 2026-08-11 against the version
+ | that only tested for NaN):
+ |
+ |   '2026-13-40' -> 2027-02-09, 02-10, 02-11    month 13, day 40 rolled over
+ |   '2026-00-00' -> 2025-11-30, 12-01, 12-02    month 0 rolled backwards
+ |   '0001-01-01' -> 1901-01-01, …               years 0-99 map to 1900 + y
+ |
+ | ACCEPTED RANGE: years 0100-9999, measured at both ends. 0001-0099 stay
+ | rejected and that is the only correct answer available here — Date.UTC maps
+ | them into the 20th century and no round trip can undo that, so returning
+ | the wrong century would be worse than returning nothing.
+ |
+ | A phantom day here is not a display glitch: the next click stamps it onto
+ | the user's residency data. So the direction is fail-CLOSED — anything that
+ | does not render back to the exact string it came from is no day at all.
+ | The anchored pattern is part of that: it rejects '2026-3-4' (unpadded) and
+ | every string carrying a time part, because an instant is not a calendar
+ | date and its date half depends on the offset it is read in.
+ |
+ | FullCalendar only ever hands over padded, date-only strings — startStr and
+ | endStr come from formatIso(…, {omitTime: span.allDay}) and daygrid forces
+ | allDay on every hit, with no timegrid plugin installed. The guard is
+ | therefore unreachable from today's UI and exists for the next caller.
+ */
+const ordinal = (iso) => {
+    if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return NaN;
+
+    const [y, m, d] = iso.split('-').map(Number);
+    const n = Math.floor(Date.UTC(y, m - 1, d) / MS_PER_DAY);
+
+    return isoOf(n) === iso ? n : NaN;
+};
+
 export function rangeDays(startIso, endIsoExclusive) {
     if (!startIso || !endIsoExclusive) return [];
-
-    const pad = (n) => String(n).padStart(2, '0');
-    const isoOf = (n) => {
-        const d = new Date(n * MS_PER_DAY);
-        // The year is padded to FOUR digits, and that is load-bearing rather than
-        // cosmetic: ordinal() below accepts a string only if isoOf() renders it
-        // back identically, so an unpadded year here silently rejects every year
-        // under 1000 — measured 2026-08-11, '0990-01-01' rendered as '990-01-01'
-        // and 657 434 previously correct inputs turned into [].
-        return `${String(d.getUTCFullYear()).padStart(4, '0')}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-    };
-
-    /*
-     | 'YYYY-MM-DD' -> that day's ordinal, or NaN if the string is not a calendar
-     | date. The round trip is the whole check, and it is not decoration: Date.UTC
-     | NORMALISES silently instead of rejecting, so without it this function
-     | invents days out of nonsense (all measured 2026-08-11 against the version
-     | that only tested for NaN):
-     |
-     |   '2026-13-40' -> 2027-02-09, 02-10, 02-11    month 13, day 40 rolled over
-     |   '2026-00-00' -> 2025-11-30, 12-01, 12-02    month 0 rolled backwards
-     |   '0001-01-01' -> 1901-01-01, …               years 0-99 map to 1900 + y
-     |
-     | ACCEPTED RANGE: years 0100-9999, measured at both ends. 0001-0099 stay
-     | rejected and that is the only correct answer available here — Date.UTC maps
-     | them into the 20th century and no round trip can undo that, so returning
-     | the wrong century would be worse than returning nothing.
-     |
-     | A phantom day here is not a display glitch: the next click stamps it onto
-     | the user's residency data. So the direction is fail-CLOSED — anything that
-     | does not render back to the exact string it came from is no day at all.
-     | The anchored pattern is part of that: it rejects '2026-3-4' (unpadded) and
-     | every string carrying a time part, because an instant is not a calendar
-     | date and its date half depends on the offset it is read in.
-     |
-     | FullCalendar only ever hands over padded, date-only strings — startStr and
-     | endStr come from formatIso(…, {omitTime: span.allDay}) and daygrid forces
-     | allDay on every hit, with no timegrid plugin installed. The guard is
-     | therefore unreachable from today's UI and exists for the next caller.
-     */
-    const ordinal = (iso) => {
-        if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return NaN;
-
-        const [y, m, d] = iso.split('-').map(Number);
-        const n = Math.floor(Date.UTC(y, m - 1, d) / MS_PER_DAY);
-
-        return isoOf(n) === iso ? n : NaN;
-    };
 
     const first = ordinal(startIso);
     const bound = ordinal(endIsoExclusive);
@@ -125,6 +135,40 @@ export function rangeDays(startIso, endIsoExclusive) {
     }
 
     return days;
+}
+
+/*
+ | ONE STEP OF THE KEYBOARD WALK — "the calendar day `delta` days from here".
+ |
+ | Same converter, same fail-closed direction, same invariant as the walk above:
+ | a calendar date is not an instant, so not one local getter and not one local
+ | constructor appears in here either. `n + delta` on day ordinals is an exact
+ | number of CALENDAR days across DST, month lengths and leap years, which is
+ | precisely what a grid cursor means by "one day left" and "one week up".
+ |
+ | It is the arithmetic of the ARROW KEYS and of nothing else: the modal's day
+ | list still comes from rangeDays(), so no write path gained a second notion of
+ | "the next day" (nostrCal.js -> openDay() builds the range end the way
+ | eventClick always did).
+ |
+ | Fail-closed here means null, and the caller reads it as "the cursor does not
+ | move": an unusable input or a step off the end of the representable range must
+ | not turn into a guess, because the day the cursor stands on is the day Enter
+ | stamps. isoOf() renders an out-of-range ordinal as 'NaN-NaN-NaN', which the
+ | round trip rejects — no separate bound check that could drift from ordinal()'s.
+ |
+ | @param {string|false|null|undefined} iso    the day standing on, 'YYYY-MM-DD'
+ | @param {number} delta                       calendar days, may be negative
+ | @returns {string|null} the shifted day as 'YYYY-MM-DD', or null
+ */
+export function shiftDay(iso, delta) {
+    const from = ordinal(iso);
+
+    if (!Number.isFinite(from) || !Number.isInteger(delta)) return null;
+
+    const to = isoOf(from + delta);
+
+    return ordinal(to) === from + delta ? to : null;
 }
 
 /*
