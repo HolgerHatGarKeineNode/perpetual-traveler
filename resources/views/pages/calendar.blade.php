@@ -791,9 +791,41 @@ updated([
                          then. The browser drops focus to BODY (measured on 6d7f51b and on
                          8dd30f4 alike). nostrCal.js's $watch on modalOpen states the way
                          back instead, keyed by the DAY the modal is about — see the block
-                         there for why an element reference cannot do that job. --}}
+                         there for why an element reference cannot do that job.
+
+                         .noautofocus closes a SECOND race, found in P15
+                         (tests/Browser/CalendarKeyboardTest.php:231 flaky 10-15%). The
+                         15ms setTimeout that schedules `trap.activate()` on open is never
+                         cancelled if the modal closes again before it fires (vendor/
+                         livewire/livewire/dist/livewire.esm.js:5760 — deactivate() bails
+                         out early via `if (!state.active) return`, because activate()'s
+                         BODY has not run yet, only been scheduled). The orphaned callback
+                         still fires ~15ms after open regardless, and it unconditionally
+                         calls _tryFocus(getInitialFocusNode()) — which, while the leave
+                         transition is still mid-flight (container is display:block for
+                         ~200ms after modalOpen goes false), finds real tabbable nodes and
+                         moves focus onto one of them (measured: the header's close
+                         button), stealing it from the day/bar the $watch below had
+                         already restored it to. When the transition later finishes and
+                         Alpine sets display:none on the container, the browser drops the
+                         focus it is holding on a now-hidden element to BODY — the exact
+                         signature P15 measured. Reproduced deterministically by
+                         intercepting `setTimeout(fn, 15)` and firing the captured
+                         callback by hand after an Escape close: activeElement moved
+                         INPUT -> BODY -> (our restore) bar -> BUTTON (the stale call) ->
+                         BODY (on transition end), never landing back on the bar.
+                         `.noautofocus` sets `options.initialFocus = false`
+                         (livewire.esm.js:5726), which makes getInitialFocusNode() return
+                         `false` unconditionally, so _tryFocus is a no-op whenever
+                         activate() runs — on time or stale. It does not touch `.inert`
+                         (onPostActivate, unrelated) or Tab-cycling (built from
+                         state.tabbableGroups, unrelated to initialFocus); the modal still
+                         needs SOMETHING to move focus in on open, and this file already
+                         supplies that independently (the x-effect below, `$refs.q?.focus()`
+                         on $nextTick) — so this removes a competing, racy focus write
+                         rather than the only one. --}}
                     <div x-show="modalOpen"
-                         x-trap.inert.noscroll.noreturn="modalOpen"
+                         x-trap.inert.noscroll.noreturn.noautofocus="modalOpen"
                          x-transition:enter="ease-out duration-300"
                          x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                          x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
