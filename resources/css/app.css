@@ -45,8 +45,36 @@
     --color-gold-400: #efb23e;
     --color-gold-500: #d9971c;
     /* gold-600 is used only as a foreground accent; kept dark enough to pass
-       AA (>=4.5:1) as small text on light surfaces (~5.3:1 on white). */
+       AA (>=4.5:1) as small text on light surfaces (5,35:1 on white #ffffff).
+       It is sized for ONE ground — the white card — and that is why it is not
+       enough everywhere: as an EDGE it is fine on any of the calendar grounds
+       (1.4.11 asks 3:1, worst case 4,36:1), as small TEXT it is not. */
     --color-gold-600: #8f6210;
+    /* gold-700 — gold ink for gold-tinted ground. WHY THE RAMP DID NOT HAVE IT:
+       the accent ramp was built as fills that get LIGHTER (300/400/500) plus one
+       dark end for text on white (600). The calendar is the first surface where
+       the ground is made of the accent ITSELF — today's tint and the selection
+       wash are both gold-400 — and a gold ground eats about one point of ratio
+       off a gold ink (5,35 -> 4,36 on today+wash). So the ramp needs one step
+       whose brief is not "text on white" but "text on gold".
+       Sized by the same rule that sized gold-600 (AA plus working margin on the
+       hardest ground it is used on), and the result is confirmed from a second,
+       independent direction: 5,62:1 on the worst light ground is the same
+       strength the dark scheme's today digit already has (gold-300 = 5,54:1), so
+       the mark is not weaker in one scheme than in the other.
+       Hue 39,3 deg — identical to gold-400, the very tint it sits on, and inside
+       the ramp's own band (300: 41,9 · 400: 39,3 · 500: 39,0 · 600: 38,7).
+       Saturation 0,892 against gold-600's 0,888. It is the same foil pressed
+       deeper, not a new colour: measured against every ground the today digit
+       can take (chain: gold-400 @14% over #ffffff, then gold-400 @22% over that):
+         #ffffff              6,90:1
+         today      #fdf4e4   6,33:1
+         wash       #fbeed5   6,02:1
+         today+wash #fae6bf   5,62:1   (gold-600 was 4,36:1 here — the 1.4.3 fail)
+       No dark counterpart: the dark scheme's today digit is gold-300 on dark
+       grounds and passes (5,54:1 worst case), so a second token there would be
+       vocabulary nobody spends. */
+    --color-gold-700: #78530d;
 
     /* Nostr identity (used ONLY for Nostr/key actions — a real brand signal) */
     --color-nostr-400: #a78bfa;
@@ -1072,8 +1100,42 @@
     text-decoration: none;
 }
 
+/* TODAY'S DIGIT — the second channel of the today state, and the one place in
+   this file where gold ink is TEXT on a gold ground.
+   It was gold-600 and that was a 1.4.3 fail on one of its four grounds: a cell
+   that is today AND inside the drag selection composites to #fae6bf (gold-400
+   @14% over the white card, then gold-400 @22% over that) and gold-600 reads
+   4,36:1 there, under the 4,5:1 asked for 12px mono. The digit is not "large
+   text": 1.4.3 wants 18pt, or 14pt bold.
+   THE FIX HAD TO BE UNCONDITIONAL, not scoped to that one state. FullCalendar
+   renders the selection as a SIBLING overlay (one .fc-highlight per week row,
+   inside .fc-daygrid-bg-harness) and puts no class on the day cell, so there is
+   no selector for "this cell is currently selected" — a state-scoped rule is not
+   available at any specificity. The ink therefore has to clear 4,5:1 on the
+   worst ground the digit can ever stand on, and it does on all four:
+     gold-600 -> gold-700   #ffffff             5,35 -> 6,90
+                            today      #fdf4e4  4,91 -> 6,33
+                            wash       #fbeed5  4,67 -> 6,02
+                            today+wash #fae6bf  4,36 -> 5,62   <- was the fail
+   No neighbour state loses: all four rise, and nothing else on the cell changes.
+   WHY NOT navy-600 (8,41:1 on today+wash, measured): it solves the number and
+   costs the meaning. Gold is this file's "the thing you are about to act on",
+   and today's tint underneath the digit is gold — a navy digit would make the
+   fill and the digit two different statements about one day. The bleed-cell rule
+   further down exempts today from its dimming for exactly the same reason.
+   WHY NOT lighten the today tint instead (14% -> less): FILL is today's own
+   channel in the three-channel scheme, so that pays for the digit with the
+   signal the digit is there to reinforce. And the wash contributes more of the
+   ground than the tint does, but it is shared with cells that are NOT today —
+   touching it would move the rails' four measured ratios (P9 Welle B) for a
+   problem that only exists on today.
+   THE RAILS AND THE GRID CURSOR STAY gold-600 ON PURPOSE. They are graphical
+   objects under 1.4.11 (3:1) and clear it on all four grounds; darkening them
+   would spend contrast they do not need and blur the split this file already
+   draws — FILL/digit is today, EDGE is the selection. Two neighbouring steps of
+   one ramp in one cell is what keeps the two states apart at the ink level. */
 .fc .fc-day-today .fc-daygrid-day-number {
-    color: var(--color-gold-600);
+    color: var(--color-gold-700);
     font-weight: 700;
 }
 

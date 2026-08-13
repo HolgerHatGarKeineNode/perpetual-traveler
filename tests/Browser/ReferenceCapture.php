@@ -59,7 +59,10 @@ beforeEach(function () {
     //
     // FIXTURE YEAR IS HARDCODED TO 2024 AND STAYS THAT WAY ON PURPOSE.
     // FullCalendar marks the real, wall-clock "today" with .fc-day-today
-    // (app.css:1075, :1245 -- gold fill). nostrCal.js sets no `initialDate`,
+    // (app.css: the `--fc-today-bg-color` gold fill plus the
+    // `.fc-day-today .fc-daygrid-day-number` ink, light and dark -- named by
+    // selector rather than by line, which the P12 ink change made stale).
+    // nostrCal.js sets no `initialDate`,
     // so a fresh Calendar always opens on the browser's actual current
     // date; only after that does `datesSet` sync `currentYear` back to
     // Livewire. A calendar year that happened to be THIS year would carry a
