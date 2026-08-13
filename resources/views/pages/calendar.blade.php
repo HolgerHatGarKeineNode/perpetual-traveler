@@ -336,7 +336,12 @@ $refreshEventBars = protect(function () {
 });
 
 $deleteDays = function ($days) {
-    $currentYear = $this->currentYear ?? now()->year;
+    // $currentYear is a public Livewire property, so the client sets it. Same
+    // clamp as refreshUntrackedDays()/$contiguousStays above: without it, an
+    // absurd value (500000, 99999, ...) is compared as a differently-sized
+    // string against the "day" column and silently matches nothing — the
+    // Stats tab empties with no crash, no exception, no message.
+    $currentYear = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
 
     /*
      | THE DAY LIST IS THE INSTRUCTION — and it used to be second-guessed. This
@@ -385,7 +390,8 @@ $deleteDays = function ($days) {
 };
 
 $saveDays = function ($days, $country) {
-    $currentYear = $this->currentYear ?? now()->year;
+    // Same clamp as deleteDays() above — see the comment there.
+    $currentYear = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
 
     // save each day in the database
     foreach ($days as $day) {
@@ -418,7 +424,8 @@ $saveDays = function ($days, $country) {
 };
 
 mount(function () {
-    $currentYear = $this->currentYear ?? now()->year;
+    // Same clamp as deleteDays() above — see the comment there.
+    $currentYear = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
 
     $this->events = Event::query()
         ->where('day', '>=', $currentYear . '-01-01')
@@ -447,7 +454,8 @@ mount(function () {
 
 updated([
     'currentYear' => function () {
-        $currentYear = $this->currentYear ?? now()->year;
+        // Same clamp as deleteDays() above — see the comment there.
+        $currentYear = max(1970, min(9999, (int) ($this->currentYear ?? now()->year)));
 
         $this->events = Event::query()
             ->where('day', '>=', $currentYear . '-01-01')
@@ -826,6 +834,9 @@ updated([
                          rather than the only one. --}}
                     <div x-show="modalOpen"
                          x-trap.inert.noscroll.noreturn.noautofocus="modalOpen"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="ptr-modal-title"
                          x-transition:enter="ease-out duration-300"
                          x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                          x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
@@ -872,7 +883,7 @@ updated([
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="eyebrow text-gold-600 dark:text-gold-300 mb-1">Stamp these days</p>
-                                    <h3 class="font-display text-lg font-semibold text-navy-900 dark:text-navy-50">Choose country</h3>
+                                    <h3 id="ptr-modal-title" class="font-display text-lg font-semibold text-navy-900 dark:text-navy-50">Choose country</h3>
                                     <p class="font-mono text-xs text-navy-500 dark:text-navy-300 mt-0.5" x-text="rangeLabel()"></p>
                                 </div>
                                 <button @click="modalOpen=false"
