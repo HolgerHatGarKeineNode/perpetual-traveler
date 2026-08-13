@@ -924,32 +924,86 @@ updated([
                             $grouped = $allCountries
                                 ->groupBy(fn($c) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($c['name'], 0, 1)))
                                 ->sortKeys();
-                            // letter => [lowercased names] for Alpine's instant filter/count
+                            /*
+                             | letter => [{n: lowercased name, c: code}] for Alpine's instant
+                             | filter, its counts AND its Enter key. The CODE travels with the
+                             | name because "the first match" has to be answerable from this
+                             | list alone — see selectFirst() below for what reading it off the
+                             | rendered list cost.
+                             |
+                             | Built from $grouped, the same collection the sections below are
+                             | rendered from, so the order here IS the order on screen: letters
+                             | sorted, and within a letter the order the buttons are printed in.
+                             */
                             $groupsForJs = $grouped
-                                ->map(fn($list) => $list->map(fn($c) => \Illuminate\Support\Str::lower($c['name']))->values()->all())
+                                ->map(fn($list) => $list->map(fn($c) => [
+                                    'n' => \Illuminate\Support\Str::lower($c['name']),
+                                    'c' => $c['iso_3166_1_alpha2'],
+                                ])->values()->all())
                                 ->all();
                             $letters = $grouped->keys()->all();
                         @endphp
+                        {{-- THE TOP MATCH COMES FROM THE LIST BELOW — never from the rendered page.
+
+                             selectFirst() used to take the first button whose offsetParent was
+                             not null, i.e. it asked the DOM which countries are on screen. The
+                             DOM is the wrong authority for that, and not by a little: x-show
+                             hands its hide to `_x_toggleAndCascadeWithTransitions`, and that
+                             function defers the actual `display:none` to `requestAnimationFrame`
+                             (vendor/livewire/livewire/dist/livewire.esm.js:2465, applied at
+                             :2487). The filter is therefore up to a FRAME behind the field — by
+                             design, and nothing here can change that.
+
+                             Enter arriving inside that frame read a list that had not narrowed
+                             yet and stamped whatever stood first in the document. Measured on
+                             the unfixed stand, 26 runs of CalendarKeyboardTest.php: 6 red
+                             (23 %). A capture-phase probe caught the state at the instant the
+                             handler ran: q was Germany and total was 1 in every red run, while
+                             the number of still-visible buttons was 4, 7 and once all 250. The
+                             day was stamped dz (Algeria) twice and af (Afghanistan) once — not
+                             one wrong country, but whichever one had not been hidden yet. No
+                             Livewire morph was involved (morph count 0 in every run); this is
+                             Alpine's own frame, not a re-render.
+
+                             So the answer is derived from `groups`, in render order, through the
+                             same matchName() the buttons' x-show uses: same predicate, same
+                             data, same order — the first visible button by construction, and
+                             true the moment q changes rather than a frame later. The mouse path
+                             never had the defect, because a click carries the code of the button
+                             that was clicked. Pinned by tests/Browser/CountrySearchTest.php.
+
+                             (The prose lives out here on purpose: an x-data attribute is
+                             delimited by double quotes, so a comment inside it that quotes
+                             anything ends the attribute and silently empties the component.) --}}
                         <div class="relative w-auto"
                              x-data="{
                                 q: '',
+                                letters: @js($letters),
                                 groups: @js($groupsForJs),
                                 get needle() { return this.q.trim().toLowerCase(); },
                                 matchName(n) { return !this.needle || n.includes(this.needle); },
                                 groupCount(l) {
                                     const g = this.groups[l];
                                     if (!g) return 0;
-                                    return this.needle ? g.filter(n => n.includes(this.needle)).length : g.length;
+                                    return this.needle ? g.filter(e => this.matchName(e.n)).length : g.length;
                                 },
                                 get total() {
-                                    return Object.values(this.groups)
-                                        .reduce((s, a) => s + (this.needle ? a.filter(n => n.includes(this.needle)).length : a.length), 0);
+                                    return this.letters.reduce((s, l) => s + this.groupCount(l), 0);
                                 },
                                 clear() { this.q = ''; this.$refs.q?.focus(); },
                                 jump(l) { document.getElementById('grp-' + l)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+                                // The first match in render order, from the data — see the
+                                // block above the element for why never from the page.
+                                firstMatch() {
+                                    for (const l of this.letters) {
+                                        const hit = (this.groups[l] || []).find(e => this.matchName(e.n));
+                                        if (hit) return hit;
+                                    }
+                                    return null;
+                                },
                                 selectFirst() {
-                                    const b = [...this.$refs.list.querySelectorAll('button[data-country]')].find(el => el.offsetParent !== null);
-                                    if (b) b.click();
+                                    const hit = this.firstMatch();
+                                    if (hit) this.setCountry(hit.c);
                                 },
                              }"
                              x-effect="modalOpen ? $nextTick(() => $refs.q?.focus()) : (q = '')">
