@@ -31,3 +31,4 @@ yarn-error.log
 # test) stays covered by the *.png rule above.
 !/tests/Browser/References/*.png
 plans/
+.omo/
