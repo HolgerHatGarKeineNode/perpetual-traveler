@@ -545,10 +545,71 @@ export default (livewireComponent) => ({
 
         this.calendar.render();
 
-        // Mobile: the pane is still zero-width at init (x-cloak/x-show), so the
-        // first render mis-sizes. Recompute once it actually has a width.
-        new ResizeObserver(() => this.calendar && this.calendar.updateSize())
-            .observe(this.$refs.cal);
+        /*
+         | THE PANE IS NOT THE WINDOW — this observer is the only thing that
+         | tells FullCalendar its container changed.
+         |
+         | Mobile: the pane is still zero-width at init (x-cloak/x-show), so the
+         | first render mis-sizes. Recompute once it actually has a width. That
+         | is what it was written for, and it is still true — but it is not the
+         | only case it carries, which is why it is NOT disconnected once a width
+         | arrives. FullCalendar listens to `window` resize on its own; a
+         | container-only change (the tab switch above, x-show, a sidebar) never
+         | reaches it. Measured on 1280x800 by shrinking the pane to 520px with
+         | the window untouched, `updateSize` neutered against live:
+         |
+         |   live      pane 856 -> 520   months 2 per row at 520px   (relaid out)
+         |   neutered  pane 856 -> 520   months 2 per row at 260px   (stale)
+         |
+         | and on 390x844 by shrinking the pane to 260px:
+         |
+         |   live      day grid 258px wide   (follows the pane)
+         |   neutered  day grid 330px wide   (70px of overflow)
+         |
+         | It is load-bearing for the FIRST render too, at both viewports, not
+         | only for later changes — delete these lines and 1280x800 lays the
+         | year grid out with one month tile per row instead of two, while
+         | 390x844 leaves the day grid's body table 0px wide for good. Both
+         | numbers and the mutation that produced them are in
+         | tests/Browser/CalendarResizeTest.php, which holds them shut.
+         |
+         | WHY THE FRAME, and not the plain `updateSize()` this used to be:
+         | updateSize() writes layout SYNCHRONOUSLY, and the element it resizes
+         | is the one being observed (height: 'auto', so the pane's height is the
+         | calendar's content height). Writing inside the callback therefore
+         | queues a second delivery inside the same notification round, and
+         | Chrome ends that round by throwing
+         | "ResizeObserver loop completed with undelivered notifications" at
+         | window.onerror. Measured on this page: 3 of 3 loads at 1280x800 threw
+         | it, 0 of 3 at 390x844 — the desktop multiMonth layout is the one whose
+         | height moves on the first update. Deferring the write to the next
+         | animation frame takes it out of the delivery round, and the message is
+         | gone at both viewports (tests/Browser/CalendarConsoleTest.php latches
+         | that, together with the rest of the console).
+         |
+         | The frame does NOT trade the loop for a slow one: `updateSize` is
+         | idempotent with respect to the pane's own box, so its write does not
+         | come back as another delivery. Measured by observing the pane for 120
+         | animation frames after load — 1 delivery (the initial one every
+         | observer gets) and 0 after it, at both viewports. A width-only guard
+         | was therefore left out: there is nothing for it to suppress, and it
+         | could only ever suppress too much.
+         |
+         | `sizePending` is not about the loop, it is about the cost: several
+         | deliveries can land in one frame (the tab switch changes width and
+         | height at once), and without the flag each of them would schedule its
+         | own layout write for that same frame. Coalescing loses nothing —
+         | updateSize reads the CURRENT box when it finally runs.
+         */
+        let sizePending = false;
+        new ResizeObserver(() => {
+            if (sizePending) return;
+            sizePending = true;
+            requestAnimationFrame(() => {
+                sizePending = false;
+                if (this.calendar) this.calendar.updateSize();
+            });
+        }).observe(this.$refs.cal);
 
         /*
          | THE DAY CURSOR, wired to the grid — see the properties at the top of
