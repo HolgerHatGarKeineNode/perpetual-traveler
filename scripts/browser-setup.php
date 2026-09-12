@@ -53,7 +53,8 @@
 | Linux-only already (P2), and a wrong guess here fails loudly (registry
 | directory exists, executable does not) rather than silently.
 |
-| WHERE BOTH SYMLINKS POINT: /usr/bin/chromium for both entries. This
+| WHERE BOTH SYMLINKS POINT: the system Chromium for both entries -- the
+| first of CHROMIUM_CANDIDATES that exists, or PT_CHROMIUM_BINARY. This
 | system's chromium package (Arch, `pacman -Ql chromium`) ships exactly one
 | browser binary — no separate chrome-headless-shell binary exists here to
 | point at instead. Chrome's headless-shell is a distinct, stripped build
@@ -75,7 +76,21 @@
 
 $repoRoot = dirname(__DIR__);
 $browsersJson = $repoRoot.'/node_modules/playwright-core/browsers.json';
-$systemChromium = '/usr/bin/chromium';
+
+// The system binary is LOOKED UP, not hardcoded. Distributions disagree on
+// the name: Arch ships /usr/bin/chromium, Fedora ships
+// /usr/bin/chromium-browser (a shell wrapper onto
+// /usr/lib64/chromium-browser/chromium-browser.sh), Debian has carried both
+// over the years. Hardcoding one of them made this script exit 1 on a
+// machine whose registry was in fact correctly wired to the other, which is
+// the opposite of what a setup script is for. PT_CHROMIUM_BINARY overrides
+// the search for anything the list does not cover.
+const CHROMIUM_CANDIDATES = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+];
 
 // The subdirectory + binary name Playwright expects INSIDE each registry
 // directory, linux-x64 only. Hardcoded because browsers.json does not carry
@@ -97,8 +112,23 @@ if (! is_file($browsersJson)) {
     fail("{$browsersJson} not found — run \"yarn install\" first.");
 }
 
-if (! is_file($systemChromium) && ! is_link($systemChromium)) {
-    fail("{$systemChromium} not found — install a system Chromium package first.");
+$override = getenv('PT_CHROMIUM_BINARY');
+$candidates = is_string($override) && $override !== ''
+    ? [$override]
+    : CHROMIUM_CANDIDATES;
+
+$systemChromium = null;
+
+foreach ($candidates as $candidate) {
+    if (is_file($candidate) || is_link($candidate)) {
+        $systemChromium = $candidate;
+        break;
+    }
+}
+
+if ($systemChromium === null) {
+    fail('no system Chromium found (tried '.implode(', ', $candidates)
+        .') — install a system Chromium package, or point PT_CHROMIUM_BINARY at one.');
 }
 
 $decoded = json_decode((string) file_get_contents($browsersJson), true);
