@@ -2,7 +2,10 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.4",
@@ -82,6 +85,18 @@
             "Composer\\Config::disableProcessTimeout",
             "@composer audit",
             "@php scripts/yarn.php npm audit --recursive"
+        ],
+        "test:feature": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan test tests/Feature"
+        ],
+        "test:unit": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan test tests/Unit"
+        ],
+        "test:browser": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan test tests/Browser"
         ]
     },
     "extra": {
