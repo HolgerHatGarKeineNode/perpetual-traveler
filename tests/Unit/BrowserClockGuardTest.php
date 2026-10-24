@@ -110,7 +110,7 @@ test('the file list reaches tests in subdirectories', function () {
             ->toBe(['Sub/Deeper/DeepTest.php', 'Sub/NestedTest.php', 'TopTest.php']);
 
         $offenders = array_filter($files, fn (string $f) => BareVisitScanner::scan(file_get_contents($f))['bare'] !== []);
-        expect(count($offenders))->toBe(2);
+        expect($offenders)->toHaveCount(2);
     } finally {
         array_map('unlink', glob($root.'/Sub/Deeper/*'));
         array_map('unlink', glob($root.'/Sub/*.php'));

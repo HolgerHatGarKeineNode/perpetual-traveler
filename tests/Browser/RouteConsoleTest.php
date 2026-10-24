@@ -3,7 +3,10 @@
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Pest\Browser\Configuration;
+use Laravel\Folio\Folio;
+use Livewire\Livewire;
 use Tests\Browser\Support\RouteCrawl;
+use Tests\Browser\Support\RouteInventory;
 
 /*
 |--------------------------------------------------------------------------
@@ -62,38 +65,62 @@ const NOT_CRAWLED = [
     // Needs a signed URL minted for a specific user and answers with a redirect, never a page.
     'verify-email/{id}/{hash}' => 'signed redirect, covered by tests/Feature/Auth/EmailVerificationTest.php',
     'api/user' => 'JSON endpoint behind Sanctum, not a page',
-    'sanctum/csrf-cookie' => 'sets a cookie, renders nothing',
-    // Folio's catch-all; the pages behind it are enumerated from resources/views/pages below.
-    '{fallbackPlaceholder}' => 'Folio catch-all',
 ];
 
 it('crawls every GET route the router and Folio have', function () {
     // The crawl's URLs, back in the router's notation.
     $crawled = collect(CRAWL)->flatMap(fn (array $routes) => array_keys($routes))
-        ->map(fn (string $url) => ltrim(str_replace('ptr-crawl-token', '{token}', $url), '/'))
+        ->map(fn (string $url) => $url === '/' ? '/' : ltrim(str_replace('ptr-crawl-token', '{token}', $url), '/'))
         ->all();
 
-    $routed = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => in_array('GET', $route->methods(), true))
-        ->map(fn ($route) => $route->uri())
-        // Livewire's own asset transport and Ignition's health check are not pages.
-        ->reject(fn (string $uri) => str_starts_with($uri, 'livewire') || str_starts_with($uri, '_ignition'))
-        ->all();
+    $pages = RouteInventory::pages();
 
-    // Folio mounts resources/views/pages; its routes are not in the router.
-    $folio = collect(glob(resource_path('views/pages/*.blade.php')))
-        ->map(fn (string $file) => basename($file, '.blade.php'))
-        ->all();
+    // Lower bounds: an inventory that returned nothing would make the diff below empty.
+    expect(count($pages))->toBeGreaterThanOrEqual(10);
+    expect($pages)->toContain('login', 'calendar', 'faq');
 
-    // Lower bounds: a router or a glob that returned nothing would make the diff below empty.
-    expect(count($routed))->toBeGreaterThanOrEqual(10);
-    expect($folio)->toContain('calendar', 'faq');
-
-    $missing = collect([...$routed, ...$folio])
-        ->reject(fn (string $uri) => $uri === '/' ? in_array('', $crawled, true) : (in_array($uri, $crawled, true) || array_key_exists($uri, NOT_CRAWLED)))
+    $missing = collect($pages)
+        ->reject(fn (string $uri) => in_array($uri, $crawled, true) || array_key_exists($uri, NOT_CRAWLED))
         ->values()->all();
 
     expect($missing)->toBe([], 'GET routes that no console crawl covers: '.implode(', ', $missing));
+});
+
+// CONTROL (a): the framework exemption is by what a route IS, not by how its URI
+// starts. The user's own /livewire-admin has to stay in the inventory; Livewire's
+// real asset routes and Ignition's health check have to stay out of it.
+it('exempts the framework\'s routes and not a user route that merely starts like one', function () {
+    Route::get('/livewire-admin', fn () => 'admin')->middleware('web');
+
+    $pages = RouteInventory::pages();
+
+    expect($pages)->toContain('livewire-admin')->not->toContain('_ignition/health-check')
+        ->and(collect($pages)->filter(fn (string $uri) => str_starts_with($uri, trim(Livewire::getUriPrefix(), '/').'/')))->toBeEmpty();
+
+    // Neither crawled nor excepted, so the completeness check above would name it.
+    expect(NOT_CRAWLED)->not->toHaveKey('livewire-admin');
+    expect(CRAWL['guest'])->not->toHaveKey('/livewire-admin');
+});
+
+// CONTROL (b): Folio pages come from Folio's own listing, so a page in a
+// subdirectory — and one under a second mount path — is in the inventory. The
+// flat glob this replaced saw neither.
+it('lists Folio pages in subdirectories and under further mount paths', function () {
+    $root = sys_get_temp_dir().'/ptr-folio-'.bin2hex(random_bytes(4));
+    mkdir($root.'/ptr-section', 0777, true);
+    file_put_contents($root.'/ptr-section/deep.blade.php', '<div>deep</div>');
+
+    try {
+        Folio::path($root);
+
+        $pages = RouteInventory::pages();
+    } finally {
+        unlink($root.'/ptr-section/deep.blade.php');
+        rmdir($root.'/ptr-section');
+        rmdir($root);
+    }
+
+    expect($pages)->toContain('ptr-section/deep', 'calendar', 'faq');
 });
 
 it('keeps the console and every status code silent on every route', function (int $width, int $height) {
@@ -182,5 +209,5 @@ it('reports a GET document answered 500 or 404 — positive control for the navi
 
     // And a healthy page next to them reports nothing, so the two matches above
     // are the status and not an artefact of every probe.
-    expect(RouteCrawl::probe('/faq', 1280, 800)['first'])->toBe([]);
+    expect(RouteCrawl::probe('/faq', 1280, 800)['first'])->toBeEmpty();
 });
