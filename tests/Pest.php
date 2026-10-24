@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\Browser\Support\BrowserClock;
 use Tests\Browser\Support\OfflineBrowser;
 use Tests\TestCase;
@@ -24,9 +25,16 @@ uses(TestCase::class, RefreshDatabase::class)->in('Browser');
 //    the same fixed 2026 instant the pinned page does. Laravel's tearDown resets Carbon.
 //  - no trip to the internet (tests/Browser/Support/OfflineBrowser.php): the fonts stylesheet
 //    is answered locally.
+//  - the compiled-view directory exists. Under `--parallel` Laravel points view.compiled at
+//    storage/framework/views/test_<token>, and Volt/Livewire write compiled components there
+//    with a bare file_put_contents(): on a cold tree the first browser request of a worker
+//    answered 500 ("No such file or directory"), 4 of 16 browser tests red on the first
+//    parallel run after a clean checkout, green on every run after it (measured 2026-10-24,
+//    the second time by deleting the test_* directories).
 pest()->beforeEach(function () {
     BrowserClock::pinServer();
     OfflineBrowser::install();
+    File::ensureDirectoryExists(config('view.compiled'));
 })->in('Browser');
 
 /*

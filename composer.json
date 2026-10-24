@@ -63,7 +63,7 @@
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test",
+            "@php artisan test --parallel",
             "node tests/js/zones.mjs"
         ],
         "test:tia": [

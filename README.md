@@ -66,6 +66,18 @@ Notes:
 - `composer test -- --no-tia` does **not** work: the argument is passed to the first script step
   (`php artisan config:clear`), which fails with `The "--no-tia" option does not exist.` Use
   `php artisan test --no-tia` instead.
+- `composer test` runs Pest with `--parallel` (24 processes on the maintainer's machine): about 30 s
+  against about 73 s serial, 3 of 3 green runs measured 2026-10-24. Use `php artisan test --no-tia`
+  for a serial run. Under `--parallel` each worker compiles views into `storage/framework/views/test_<n>`;
+  `tests/Pest.php` creates that directory for browser tests, because on a cold tree Volt/Livewire write
+  there without creating it.
+- Browser tests run on a pinned clock (`tests/Browser/Support/BrowserClock.php`: the page and the
+  in-process server both sit at 2026-06-15) and never leave the machine (`OfflineBrowser.php` answers
+  the fonts stylesheet locally; the console latch reports any other off-origin request). Open pages
+  with `ConsoleLatch::open()`, not `visit()` — `tests/Unit/BrowserClockGuardTest.php` fails on a bare
+  `visit()`.
+- `tests/js/zones.mjs` pins the number of passing JS tests per zone (`EXPECTED_PASS`). Added or removed
+  a JS test? The red run prints the new number; set the constant in the same commit.
 - Rector runs on `tests/` only (see `rector.php`):
   `vendor/bin/rector process tests --dry-run --clear-cache`. Without `--clear-cache` Rector
   reports `[OK] Rector is done!` from its cache — you would be looking at the previous run, not
