@@ -184,6 +184,12 @@ it('reports every channel it latches — the positive control', function () {
         image.src = '/ptr-control-missing-asset.png';
         document.body.appendChild(image);
 
+        // Another ORIGIN: same machine, different host name — the page reached
+        // for something that is not this server (OfflineBrowser.php).
+        const offOrigin = document.createElement('img');
+        offOrigin.src = location.protocol + '//localhost:' + location.port + '/ptr-control-off-origin.png';
+        document.body.appendChild(offOrigin);
+
         // A status code. No console channel shows this one at all.
         fetch('/ptr-control-missing-route');
 
@@ -216,7 +222,9 @@ it('reports every channel it latches — the positive control', function () {
         ->toContain('[resource] IMG ')
         ->toContain('ptr-control-missing-asset.png')
         ->toContain('[http] 404 ')
-        ->toContain('ptr-control-missing-route');
+        ->toContain('ptr-control-missing-route')
+        ->toContain('[external] http://localhost:')
+        ->toContain('ptr-control-off-origin.png');
 
     /*
      | AND THE OTHER WAY AN EMPTY LIST CAN LIE. The entries live on `window`, so
@@ -395,7 +403,7 @@ it('opens the same kind of browser context that visit() opens', function () {
     })
     JS;
 
-    $throughVisit = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $throughVisit = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]); // clock-pin-exempt: this case exists to open the page the plugin's way
     $throughVisit->assertPresent('.fc-daygrid-day');
 
     $throughLatch = ConsoleLatch::open('/calendar', 1280, 800);

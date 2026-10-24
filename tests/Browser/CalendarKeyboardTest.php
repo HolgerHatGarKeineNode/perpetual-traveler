@@ -4,6 +4,7 @@ use App\Models\Event;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Pest\Browser\Configuration;
+use Tests\Browser\Support\ConsoleLatch;
 
 /*
 |--------------------------------------------------------------------------
@@ -129,7 +130,8 @@ it('walks from the toolbar to an unstamped day and stamps it, without a single m
     $user = keyboardUser();
     $this->actingAs($user);
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('.ptr-stay');
 
     [$where, $walk] = tabUntil($page, 'cell:');
@@ -185,6 +187,9 @@ it('walks from the toolbar to an unstamped day and stamps it, without a single m
     // The modal was about a day, so the keyboard stands on that day when it
     // closes — including after a write that re-rendered the grid.
     expect($page->script(WHERE))->toBe('cell:'.$target);
+
+    // The page said nothing while the keyboard drove it (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after the keyboard-only walk and stamp');
 });
 
 /*
@@ -202,7 +207,8 @@ it('puts the focus back on the element that opened the modal after Escape', func
 
     $this->actingAs(keyboardUser());
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('.ptr-stay');
 
     // (a) from a stay bar.
@@ -229,6 +235,9 @@ it('puts the focus back on the element that opened the modal after Escape', func
     $page->assertDontSee('Choose country');
 
     expect($page->script(WHERE))->toBe($cell);
+
+    // The page said nothing while the keyboard drove it (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after Escape handed the focus back');
 });
 
 /*
@@ -249,7 +258,8 @@ it('keeps the cursor day of a stay across Escape and a full tab walk past the ot
 
     $this->actingAs(keyboardUser());
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('.ptr-stay');
 
     [$where] = tabUntil($page, 'bar:2026-03-02');
@@ -288,6 +298,9 @@ it('keeps the cursor day of a stay across Escape and a full tab walk past the ot
     // here.
     expect($page->script("document.activeElement.querySelector('.ptr-stay').style.getPropertyValue('--ptr-cursor')"))
         ->toBe('4');
+
+    // The page said nothing while the keyboard drove it (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after the Escape and tab walk');
 });
 
 /*
@@ -309,7 +322,8 @@ it('takes ArrowUp and ArrowDown for the row step, from a cell and from a bar', f
 
     $this->actingAs(keyboardUser());
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('.ptr-stay');
 
     // Bubble phase on window, so this listener sees the flag AFTER the grid's
@@ -338,6 +352,9 @@ it('takes ArrowUp and ArrowDown for the row step, from a cell and from a bar', f
 
     expect($page->script('window.__prevented'))->toBeTrue();
     expect($page->script(WHERE))->toBe('cell:2026-03-09');
+
+    // The page said nothing while the keyboard drove it (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after the ArrowUp/ArrowDown row steps');
 });
 
 /*
@@ -364,10 +381,8 @@ it('draws the cursor as a box the size of the cell, in both colour schemes', fun
     $this->actingAs(keyboardUser());
 
     foreach (['light' => 'rgb(143, 98, 16)', 'dark' => 'rgb(239, 178, 62)'] as $scheme => $ink) {
-        $page = visit('/calendar', [
-            'viewport' => ['width' => 1280, 'height' => 800],
-            'colorScheme' => $scheme,
-        ]);
+        $latch = ConsoleLatch::open('/calendar', 1280, 800, $scheme);
+        $page = $latch->page;
         $page->assertPresent('.fc-daygrid-day');
 
         // Reached by KEY press, so :focus-visible applies — a programmatic
@@ -405,5 +420,8 @@ JS);
         expect($mark['coversWidth'])->toBeTrue($scheme.': the mark is not as wide as the cell');
         expect($mark['coversHeight'])
             ->toBeTrue($scheme.': the mark is '.$mark['height'].'px tall, the cell is not');
+
+        // The page said nothing while the cursor was drawn (ConsoleLatch: whole console + status codes).
+        $latch->assertSilent('after drawing the cursor in the '.$scheme.' colour scheme');
     }
 });

@@ -38,6 +38,14 @@ use Pest\Browser\Support\ComputeUrl;
 |      interaction with a 500 and look immaculate in every console assertion
 |      there is.
 |
+| A fifth channel was added 2026-10-24 and is not a complaint of the page but of
+| the suite: `external`, any request to an origin other than the server under
+| test. A real HTTPS call to a fonts CDN turned the latch red in one captured
+| run (2 of 3 full browser runs were red that day) and made the first load of a
+| page take 7.5 s; tests/Browser/Support/OfflineBrowser.php has the measurement
+| and the fix. The page no longer reaches the CDN, and this channel is what
+| makes the next such host loud.
+|
 | The latch is a BLANKET, not an allow-list: it records every console level
 | that produces output, every uncaught error, every unhandled rejection,
 | every failed resource and every response >= 400 — and the assertion is that
@@ -108,16 +116,28 @@ final class ConsoleLatch
     }
 
     /**
-     * Opens the given URL at the given viewport with the recorder already installed.
+     * Opens the given URL at the given viewport with the recorder already installed
+     * and the page's clock pinned to BrowserClock::INSTANT (see BrowserClock).
      */
-    public static function open(string $url, int $width, int $height): self
+    public static function open(string $url, int $width, int $height, ?string $colorScheme = null): self
     {
+        // The page is pinned to BrowserClock::INSTANT below; the server has to
+        // be pinned to the same instant (tests/Pest.php does it for every
+        // browser test), or the two halves of one page would disagree about
+        // what year it is. Refusing here beats a test that is green by luck.
+        if (! BrowserClock::serverIsPinned()) {
+            throw new \LogicException(
+                'ConsoleLatch::open() needs the server clock pinned to '.BrowserClock::INSTANT
+                .' (BrowserClock::pinServer(), wired for tests/Browser in tests/Pest.php).'
+            );
+        }
+
         $browser = Playwright::browser(Playwright::defaultBrowserType())->launch();
 
         $context = $browser->newContext([
             'locale' => 'en-US',
             'timezoneId' => 'UTC',
-            'colorScheme' => Playwright::defaultColorScheme()->value,
+            'colorScheme' => $colorScheme ?? Playwright::defaultColorScheme()->value,
             ...Device::DESKTOP->context(),
             'viewport' => ['width' => $width, 'height' => $height],
         ]);
@@ -125,6 +145,7 @@ final class ConsoleLatch
         // The plugin's recorder FIRST, so assertNoConsoleLogs() and
         // assertNoJavaScriptErrors() keep measuring on a page opened this way.
         $context->addInitScript(InitScript::get());
+        $context->addInitScript(BrowserClock::script());
         $context->addInitScript(self::recorder());
 
         $computed = ComputeUrl::from($url);
@@ -312,6 +333,22 @@ final class ConsoleLatch
             window.addEventListener('unhandledrejection', (event) => {
                 record('unhandledrejection', describe(event.reason));
             });
+
+            // OFF-ORIGIN REQUESTS. A page that reaches for another host is a page
+            // whose result depends on that host (OfflineBrowser.php has the
+            // measurement). The observer is not bounded by the resource timing
+            // buffer, and `buffered` replays what loaded before it was attached.
+            new PerformanceObserver((list) => {
+                for (const resource of list.getEntries()) {
+                    try {
+                        if (new URL(resource.name).origin !== location.origin) {
+                            record('external', resource.name);
+                        }
+                    } catch (error) {
+                        record('external', 'unparseable resource: ' + resource.name);
+                    }
+                }
+            }).observe({ type: 'resource', buffered: true });
 
             // THE CHANNEL NO CONSOLE HAS. Livewire answers every interaction on
             // this page through fetch; a 500 there resolves the promise with a

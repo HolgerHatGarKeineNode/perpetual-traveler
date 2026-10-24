@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Browser\Support\BrowserClock;
+use Tests\Browser\Support\OfflineBrowser;
 use Tests\TestCase;
 
 /*
@@ -16,6 +18,16 @@ use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class)->in('Feature');
 uses(TestCase::class, RefreshDatabase::class)->in('Browser');
+
+// Two things every browser test gets from the in-process server:
+//  - the server half of the clock pin (tests/Browser/Support/BrowserClock.php): now() sits at
+//    the same fixed 2026 instant the pinned page does. Laravel's tearDown resets Carbon.
+//  - no trip to the internet (tests/Browser/Support/OfflineBrowser.php): the fonts stylesheet
+//    is answered locally.
+pest()->beforeEach(function () {
+    BrowserClock::pinServer();
+    OfflineBrowser::install();
+})->in('Browser');
 
 /*
 |--------------------------------------------------------------------------

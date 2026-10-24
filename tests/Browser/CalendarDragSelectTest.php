@@ -3,6 +3,7 @@
 use App\Models\Event;
 use App\Models\User;
 use Pest\Browser\Configuration;
+use Tests\Browser\Support\ConsoleLatch;
 
 /*
 |--------------------------------------------------------------------------
@@ -40,7 +41,8 @@ it('drag-selects two days on desktop, opens the modal, saves through Livewire an
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
 
     // The grid has to exist before it can be dragged across.
     $page->assertPresent('td[data-date="2026-03-16"]')
@@ -87,6 +89,10 @@ it('drag-selects two days on desktop, opens the modal, saves through Livewire an
     $page->assertAttributeContains('.ptr-stay', 'aria-label', 'Germany')
         ->assertAttributeContains('.ptr-stay', 'data-from', '2026-03-16')
         ->assertAttributeContains('.ptr-stay', 'data-to', '2026-03-19');
+
+    // The page said nothing through the drag, the Livewire save and the re-render
+    // (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after the drag-select, save and re-render');
 });
 
 /*
@@ -109,7 +115,8 @@ it('day cells refuse touch scrolling at a mobile viewport (touch-action: none)',
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $page = visit('/calendar', ['viewport' => ['width' => 390, 'height' => 844]]);
+    $latch = ConsoleLatch::open('/calendar', 390, 844);
+    $page = $latch->page;
 
     $page->assertPresent('.fc-daygrid-day');
 
@@ -118,4 +125,6 @@ it('day cells refuse touch scrolling at a mobile viewport (touch-action: none)',
     );
 
     expect($touchAction)->toBe('none');
+
+    $latch->assertSilent('on first load of /calendar at 390x844');
 });

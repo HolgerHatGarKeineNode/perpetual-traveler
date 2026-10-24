@@ -3,6 +3,7 @@
 use App\Models\Event;
 use App\Models\User;
 use Pest\Browser\Configuration;
+use Tests\Browser\Support\ConsoleLatch;
 
 /*
 |--------------------------------------------------------------------------
@@ -91,7 +92,8 @@ it('stamps the typed country even when the filtered list is still a frame behind
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('td[data-date="2026-03-16"]');
 
     // Same route into the modal as CalendarDragSelectTest: one week, one
@@ -124,6 +126,9 @@ it('stamps the typed country even when the filtered list is still a frame behind
         ->pluck('country')
         ->unique()
         ->all())->toBe(['de']);
+
+    // The page said nothing through the whole stamp (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after stamping the typed country');
 });
 
 /*
@@ -146,7 +151,8 @@ it('holds the country data in the same order as the rendered buttons', function 
 
     $this->actingAs(User::factory()->create());
 
-    $page = visit('/calendar', ['viewport' => ['width' => 1280, 'height' => 800]]);
+    $latch = ConsoleLatch::open('/calendar', 1280, 800);
+    $page = $latch->page;
     $page->assertPresent('button[data-country]');
 
     $order = (array) $page->script(<<<'JS'
@@ -165,4 +171,7 @@ JS);
     expect(count($order['data']))->toBeGreaterThan(200);
     expect($order['codes'])->toBe(count($order['data']));
     expect($order['data'])->toBe($order['dom']);
+
+    // The page said nothing while the country list was read (ConsoleLatch: whole console + status codes).
+    $latch->assertSilent('after reading the country data');
 });
