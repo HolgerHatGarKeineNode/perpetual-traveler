@@ -46,8 +46,8 @@ it('runs the page clock from the pinned instant, keeps it moving, and leaves exp
     // Pinned: within a minute of the instant (the page has been alive for a
     // few seconds at most), nowhere near the machine's own clock.
     expect($reading['first'])->toBeGreaterThanOrEqual($pinned)->toBeLessThan($pinned + 60_000);
-    expect($reading['year'])->toBe(2026);
-    expect($reading['asFunction'])->toContain('2026');
+    expect($reading['year'])->toBe(2026)
+        ->and($reading['asFunction'])->toContain('2026');
 
     // Running, not frozen: 30 frames later the clock has moved, at real speed.
     expect($reading['second'])->toBeGreaterThan($reading['first'])->toBeLessThan($reading['first'] + 10_000);
@@ -55,9 +55,7 @@ it('runs the page clock from the pinned instant, keeps it moving, and leaves exp
 
     // Still the real Date underneath.
     expect($reading['isDate'])->toBeTrue();
-    expect($reading['explicitLocal'])->toBe(16);
-    expect($reading['explicitIso'])->toBe(2031);
-    expect($reading['utc'])->toBe(1_893_456_000_000);
+    expect($reading)->toMatchArray(['explicitLocal' => 16, 'explicitIso' => 2031, 'utc' => 1_893_456_000_000]);
 
     // The other half: the in-process server reads the same instant.
     expect(BrowserClock::serverIsPinned())->toBeTrue();

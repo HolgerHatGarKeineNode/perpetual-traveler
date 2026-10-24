@@ -100,8 +100,8 @@ test('a file that holds tests but is not named *Test.php is a named exception', 
     // The exception list must not rot either: a held-back file that is gone, or
     // that no longer holds tests, should leave the list.
     foreach (array_keys(HELD_BACK) as $file) {
-        expect(is_file(dirname(__DIR__).'/'.$file))->toBeTrue($file.' is in HELD_BACK but does not exist');
-        expect(TestFileInspector::countTests(file_get_contents(dirname(__DIR__).'/'.$file)))->toBeGreaterThan(0, $file.' is in HELD_BACK but declares no tests');
+        expect(dirname(__DIR__).'/'.$file)->toBeFile()
+            ->and(TestFileInspector::countTests(file_get_contents(dirname(__DIR__).'/'.$file)))->toBeGreaterThan(0, $file.' is in HELD_BACK but declares no tests');
     }
 });
 
@@ -109,8 +109,8 @@ test('a file that holds tests but is not named *Test.php is a named exception', 
 test('the inspector tells a silent file from a live one', function () {
     $live = "<?php\n\nit('does a thing', function () { expect(true)->toBeTrue(); });\n";
 
-    expect(TestFileInspector::opensWithPhpTag($live))->toBeTrue();
-    expect(TestFileInspector::countTests($live))->toBe(1);
+    expect(TestFileInspector::opensWithPhpTag($live))->toBeTrue()
+        ->and(TestFileInspector::countTests($live))->toBe(1);
 
     // Lost its opening tag: PHP sees text. The body still LOOKS like a test file.
     $noTag = "it('does a thing', function () { expect(true)->toBeTrue(); });\n";
@@ -122,16 +122,15 @@ test('the inspector tells a silent file from a live one', function () {
 
     // Tag present, no test: prose, helpers, method calls and a string do not count.
     $empty = "<?php\n// it('is only a comment', fn () => 1);\n/* test('so is this') */\n\$x->test('a'); Foo::it('b'); function test(\$a) {}\n\$s = \"it('c')\";\n";
-    expect(TestFileInspector::countTests($empty))->toBe(0);
-
-    expect(TestFileInspector::countTests("<?php\ntest('a', fn () => 1);\nit('b', fn () => 1);\n"))->toBe(2);
+    expect(TestFileInspector::countTests($empty))->toBe(0)
+        ->and(TestFileInspector::countTests("<?php\ntest('a', fn () => 1);\nit('b', fn () => 1);\n"))->toBe(2);
 });
 
 test('the collection check names a file Pest does not list', function () {
-    expect(TestFileInspector::uncollected(['Unit/A.php', 'Unit/B.php'], ['Unit/A.php']))->toBe(['Unit/B.php']);
-    expect(TestFileInspector::uncollected(['Unit/A.php'], ['Unit/A.php']))->toBe([]);
+    expect(TestFileInspector::uncollected(['Unit/A.php', 'Unit/B.php'], ['Unit/A.php']))->toBe(['Unit/B.php'])
+        ->and(TestFileInspector::uncollected(['Unit/A.php'], ['Unit/A.php']))->toBeEmpty();
 
     $listing = " INFO  Available tests:\n\n - P\\Tests\\Feature\\Auth\\AuthenticationTest::__pest_evaluable_a\n - P\\Tests\\Unit\\ExampleTest::__pest_evaluable_b\n - P\\Tests\\Unit\\ExampleTest::__pest_evaluable_c\n";
-    expect(TestFileInspector::filesFromListing($listing))->toBe(['Feature/Auth/AuthenticationTest.php', 'Unit/ExampleTest.php']);
-    expect(TestFileInspector::filesFromListing('Fatal error: nothing here'))->toBe([]);
+    expect(TestFileInspector::filesFromListing($listing))->toBe(['Feature/Auth/AuthenticationTest.php', 'Unit/ExampleTest.php'])
+        ->and(TestFileInspector::filesFromListing('Fatal error: nothing here'))->toBeEmpty();
 });

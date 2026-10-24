@@ -60,8 +60,8 @@ test('the only exempt visit() is the context-parity probe in CalendarConsoleTest
 test('the scanner flags a bare visit() and nothing that merely looks like one', function () {
     $scan = fn (string $php): array => BareVisitScanner::scan("<?php\n".$php);
 
-    expect($scan("\$p = visit('/calendar');")['bare'])->toBe([2]);
-    expect($scan("\$p = visit(\n'/calendar',\n);")['bare'])->toBe([2]);
+    expect($scan("\$p = visit('/calendar');")['bare'])->toBe([2])
+        ->and($scan("\$p = visit(\n'/calendar',\n);")['bare'])->toBe([2]);
 
     // The exemption is per line and needs the marker.
     expect($scan("\$p = visit('/calendar'); // clock-pin-exempt: probe"))
@@ -70,8 +70,7 @@ test('the scanner flags a bare visit() and nothing that merely looks like one', 
 
     // Prose, strings and other callables named visit are not the global function.
     expect($scan("/* visit('/calendar') */"))->toBe(['bare' => [], 'exempt' => []]);
-    expect($scan("// visit('/calendar')"))->toBe(['bare' => [], 'exempt' => []]);
-    expect($scan("\$s = \"visit('/calendar')\";"))->toBe(['bare' => [], 'exempt' => []]);
-    expect($scan("\$x->visit('/a'); Foo::visit('/a'); function visit(\$u) {}"))
-        ->toBe(['bare' => [], 'exempt' => []]);
+    expect($scan("// visit('/calendar')"))->toBe(['bare' => [], 'exempt' => []])
+        ->and($scan("\$s = \"visit('/calendar')\";"))->toBe(['bare' => [], 'exempt' => []])
+        ->and($scan("\$x->visit('/a'); Foo::visit('/a'); function visit(\$u) {}"))->toBe(['bare' => [], 'exempt' => []]);
 });

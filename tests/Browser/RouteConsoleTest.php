@@ -162,6 +162,6 @@ it('reports a 500 on a crawled page\'s Livewire roundtrip — positive control',
 
     $result = RouteCrawl::probe('/login', 1280, 800);
 
-    expect($result['livewire'])->toBeGreaterThan(0);
-    expect(RouteCrawl::describe($result['roundtrip']))->toMatch('#\[http\] 500 \S*'.preg_quote($uri, '#').'#');
+    expect($result['livewire'])->toBeGreaterThan(0)
+        ->and(RouteCrawl::describe($result['roundtrip']))->toMatch('#\[http\] 500 \S*'.preg_quote($uri, '#').'#');
 });
