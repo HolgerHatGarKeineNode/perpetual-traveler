@@ -28,6 +28,13 @@ final class BareVisitScanner
         $commentsByLine = [];
         $calls = [];
 
+        // `use function Pest\Browser\visit as open;` makes `open(...)` a visit() too.
+        $callable = ['visit'];
+
+        if (preg_match_all('/use\s+function\s+[\w\\\\]*\bvisit\s+as\s+(\w+)/i', $source, $aliases) > 0) {
+            array_push($callable, ...array_map('strtolower', $aliases[1]));
+        }
+
         foreach ($tokens as $i => $token) {
             if (! is_array($token)) {
                 continue;
@@ -41,7 +48,17 @@ final class BareVisitScanner
                 continue;
             }
 
-            if ($id !== T_STRING || strtolower($text) !== 'visit') {
+            // PHP 8 tokenizes `\visit` and `\Pest\Browser\visit` as ONE name token,
+            // not as T_STRING, so a check on bare names alone misses both. A name
+            // in any namespace whose LAST segment is a visit callable counts:
+            // over-flagging costs an exemption marker, under-flagging costs the guard.
+            if (! in_array($id, [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_QUALIFIED], true)) {
+                continue;
+            }
+
+            $lastSegment = strtolower(substr(strrchr('\\'.$text, '\\'), 1));
+
+            if (! in_array($lastSegment, $callable, true)) {
                 continue;
             }
 
@@ -49,7 +66,7 @@ final class BareVisitScanner
             $next = self::neighbour($tokens, $i, 1);
 
             $isMethodOrStatic = is_array($previous) && in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON], true);
-            $isDeclaration = is_array($previous) && $previous[0] === T_FUNCTION;
+            $isDeclaration = is_array($previous) && in_array($previous[0], [T_FUNCTION, T_USE, T_NEW], true);
 
             if ($next === '(' && ! $isMethodOrStatic && ! $isDeclaration) {
                 $calls[] = $line;
@@ -68,6 +85,28 @@ final class BareVisitScanner
         }
 
         return ['bare' => $bare, 'exempt' => $exempt];
+    }
+
+    /**
+     * Every collected browser test, subdirectories included. phpunit.xml collects
+     * tests/Browser recursively, so a flat glob would let tests/Browser/Sub/XTest.php
+     * keep a bare visit() without a word from the guard.
+     *
+     * @return array<int, string> absolute paths, sorted
+     */
+    public static function testFilesUnder(string $directory): array
+    {
+        $files = [];
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if (str_ends_with($file->getFilename(), 'Test.php')) {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        sort($files);
+
+        return $files;
     }
 
     /**

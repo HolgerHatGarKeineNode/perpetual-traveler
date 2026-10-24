@@ -22,9 +22,11 @@ use Tests\Support\BareVisitScanner;
  */
 
 /** Browser test files that phpunit.xml collects. */
-$browserTests = fn (): array => glob(dirname(__DIR__).'/Browser/*Test.php');
+$browserTests = fn (): array => BareVisitScanner::testFilesUnder(dirname(__DIR__).'/Browser');
 
-test('no collected browser test opens a page through a bare visit()', function () use ($browserTests) {
+$relative = fn (string $file): string => substr($file, strlen(dirname(__DIR__).'/Browser/'));
+
+test('no collected browser test opens a page through a bare visit()', function () use ($browserTests, $relative) {
     $files = $browserTests();
 
     // Lower bound: a glob that matched nothing would make the loop below vacuous.
@@ -34,7 +36,7 @@ test('no collected browser test opens a page through a bare visit()', function (
 
     foreach ($files as $file) {
         foreach (BareVisitScanner::scan(file_get_contents($file))['bare'] as $line) {
-            $offenders[] = basename($file).':'.$line;
+            $offenders[] = $relative($file).':'.$line;
         }
     }
 
@@ -43,12 +45,12 @@ test('no collected browser test opens a page through a bare visit()', function (
         .'or mark the line `// '.BareVisitScanner::EXEMPT_MARKER.': <reason>`: '.implode(', ', $offenders));
 });
 
-test('the only exempt visit() is the context-parity probe in CalendarConsoleTest', function () use ($browserTests) {
+test('the only exempt visit() is the context-parity probe in CalendarConsoleTest', function () use ($browserTests, $relative) {
     $exempt = [];
 
     foreach ($browserTests() as $file) {
         if (BareVisitScanner::scan(file_get_contents($file))['exempt'] !== []) {
-            $exempt[] = basename($file);
+            $exempt[] = $relative($file);
         }
     }
 
@@ -73,4 +75,48 @@ test('the scanner flags a bare visit() and nothing that merely looks like one', 
     expect($scan("// visit('/calendar')"))->toBe(['bare' => [], 'exempt' => []])
         ->and($scan("\$s = \"visit('/calendar')\";"))->toBe(['bare' => [], 'exempt' => []])
         ->and($scan("\$x->visit('/a'); Foo::visit('/a'); function visit(\$u) {}"))->toBe(['bare' => [], 'exempt' => []]);
+});
+
+// Namespaced spellings. PHP 8 makes `\visit` and `\Pest\Browser\visit` ONE name
+// token (T_NAME_FULLY_QUALIFIED), which a check for T_STRING never sees: the
+// scanner returned bare => [] for all of them (reviewer repro, 2026-10-24).
+test('the scanner sees visit() however it is spelled', function () {
+    $scan = fn (string $php): array => BareVisitScanner::scan("<?php\n".$php);
+
+    expect($scan("\$p = \\visit('/calendar');")['bare'])->toBe([2])
+        ->and($scan("\$p = \\Pest\\Browser\\visit('/calendar');")['bare'])->toBe([2])
+        ->and($scan("\$p = Browser\\visit('/calendar');")['bare'])->toBe([2])
+        ->and($scan("use function Pest\\Browser\\visit as open;\n\$p = open('/calendar');")['bare'])->toBe([3])
+        ->and($scan("\$p = \\visit('/calendar'); // clock-pin-exempt: probe"))->toBe(['bare' => [], 'exempt' => [2]]);
+
+    // The import itself, a method and a class constant of that name are not calls.
+    expect($scan("use function Pest\\Browser\\visit;\n\$a->visit('/x'); Foo::visit('/x'); new Visit('/x');"))
+        ->toBe(['bare' => [], 'exempt' => []]);
+});
+
+// phpunit.xml collects tests/Browser RECURSIVELY; the file list must too.
+test('the file list reaches tests in subdirectories', function () {
+    $root = sys_get_temp_dir().'/ptr-visit-guard-'.bin2hex(random_bytes(4));
+    mkdir($root.'/Sub/Deeper', 0777, true);
+    file_put_contents($root.'/TopTest.php', "<?php\n");
+    file_put_contents($root.'/Sub/NestedTest.php', "<?php\n\$p = visit('/calendar');\n");
+    file_put_contents($root.'/Sub/Deeper/DeepTest.php', "<?php\n\$p = \\visit('/calendar');\n");
+    file_put_contents($root.'/Sub/Helper.php', "<?php\n\$p = visit('/calendar');\n");
+
+    try {
+        $files = BareVisitScanner::testFilesUnder($root);
+
+        expect(array_map(fn (string $f) => substr($f, strlen($root) + 1), $files))
+            ->toBe(['Sub/Deeper/DeepTest.php', 'Sub/NestedTest.php', 'TopTest.php']);
+
+        $offenders = array_filter($files, fn (string $f) => BareVisitScanner::scan(file_get_contents($f))['bare'] !== []);
+        expect(count($offenders))->toBe(2);
+    } finally {
+        array_map('unlink', glob($root.'/Sub/Deeper/*'));
+        array_map('unlink', glob($root.'/Sub/*.php'));
+        array_map('unlink', glob($root.'/*.php'));
+        rmdir($root.'/Sub/Deeper');
+        rmdir($root.'/Sub');
+        rmdir($root);
+    }
 });
