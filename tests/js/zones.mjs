@@ -39,7 +39,8 @@
  | one: they cover a failure mode the other nine structurally cannot.
  |
  | Usage:  node tests/js/zones.mjs   (or `yarn test:js:zones`)
- | Exit:   0 only if EVERY zone passes.
+ | Exit:   0 only if EVERY zone reports exactly EXPECTED_PASS passing tests and nothing
+ |         skipped, todo, cancelled or failing (the exit status alone is NOT the gate).
  |
  | ANCHORED in composer.json's "test" script, as the last line, so it runs on
  | every `composer test` and cannot rot unnoticed — there is no CI in this repo
@@ -64,6 +65,22 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {readdirSync} from 'node:fs';
 import path from 'node:path';
+import {verdict} from './zonesGate.mjs';
+
+/*
+ | THE EXPECTED NUMBER OF PASSING TESTS, per zone — one constant, on purpose.
+ |
+ | Every zone must report EXACTLY this many passes and nothing else: no fail, no
+ | cancelled, no skipped, no todo, and a tally that can be read (verdict() in
+ | zonesGate.mjs has the why). Until 2026-10-24 the exit status was the only
+ | gate, so a file that lost cases or a case turned `.skip` stayed green.
+ |
+ | Added or removed a test on purpose? The red run prints the number it got and
+ | names this constant: set it to that number, in the same commit as the test.
+ | Measured 2026-10-24: 242 in each of the 11 zones before zonesGate.test.js was
+ | added (+7).
+ */
+const EXPECTED_PASS = 249;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,21 +148,21 @@ const zones = [
 const results = [];
 
 for (const zone of zones) {
-    const run = spawnSync(process.execPath, ['--test', ...testFiles], {
+    // The reporter is PINNED: Node's default is TAP when piped on 22 and spec on
+    // 26, and the summary lines differ (see zonesGate.mjs).
+    const run = spawnSync(process.execPath, ['--test', '--test-reporter=spec', ...testFiles], {
         env: {...process.env, TZ: zone},
         encoding: 'utf8',
     });
 
-    // node --test's summary lines look like "ℹ pass 60" / "ℹ fail 2".
-    const tally = (word) => (run.stdout.match(new RegExp(`^\\S*\\s*${word} (\\d+)$`, 'm')) ?? [, '?'])[1];
-    const pass = tally('pass');
-    const fail = tally('fail');
-    const ok = run.status === 0;
+    const {problems, pass, fail} = verdict({status: run.status, stdout: run.stdout, expectedPass: EXPECTED_PASS});
+    const ok = problems.length === 0;
 
-    results.push({zone, ok, pass, fail});
+    results.push({zone, ok, pass: pass ?? '?', fail: fail ?? '?', problems});
 
     process.stdout.write(`\n===== TZ=${zone} =====\n`);
     process.stdout.write(ok ? `pass ${pass}, fail ${fail}\n` : run.stdout);
+    for (const problem of problems) process.stdout.write(`GATE: ${problem}\n`);
     if (run.stderr) process.stderr.write(run.stderr);
 }
 
@@ -156,5 +173,8 @@ for (const {zone, ok, pass, fail} of results) {
 }
 
 const broken = results.filter((r) => !r.ok);
+for (const {zone, problems} of broken) {
+    for (const problem of problems) process.stdout.write(`GATE ${zone}: ${problem}\n`);
+}
 process.stdout.write(`\n${results.length - broken.length}/${results.length} zones green\n`);
 process.exit(broken.length === 0 ? 0 : 1);
