@@ -38,6 +38,11 @@ use Pest\Browser\Support\ComputeUrl;
 |      interaction with a 500 and look immaculate in every console assertion
 |      there is.
 |
+| The `http` channel also carries the DOCUMENT's own status since 2026-10-24: a GET
+| route answering 500 or 404 with a rendered body was invisible to a latch that
+| only wrapped fetch/XHR (reviewer repro: RouteCrawl on a route that aborts 500
+| came back empty).
+|
 | A fifth channel was added 2026-10-24 and is not a complaint of the page but of
 | the suite: `external`, any request to an origin other than the server under
 | test. A real HTTPS call to a fonts CDN turned the latch red in one captured
@@ -333,6 +338,26 @@ final class ConsoleLatch
             window.addEventListener('unhandledrejection', (event) => {
                 record('unhandledrejection', describe(event.reason));
             });
+
+            // THE DOCUMENT'S OWN STATUS. The fetch/XHR wrappers below never see the
+            // navigation that delivered this page: a route answering 500 or 404
+            // with an HTML body renders, boots and says nothing anywhere.
+            // goto() hands back no response in this plugin, so the answer is read
+            // from the navigation timing entry, which exists before any script of
+            // the page runs. A status that cannot be read is reported as such:
+            // unreadable must not look like 200.
+            try {
+                const navigation = performance.getEntriesByType('navigation')[0];
+                const status = navigation ? navigation.responseStatus : undefined;
+
+                if (typeof status !== 'number' || status === 0) {
+                    record('http', 'document status unreadable: ' + location.href);
+                } else if (status >= 400) {
+                    record('http', 'document ' + status + ' ' + location.href);
+                }
+            } catch (error) {
+                record('http', 'document status unreadable: ' + describe(error));
+            }
 
             // OFF-ORIGIN REQUESTS. A page that reaches for another host is a page
             // whose result depends on that host (OfflineBrowser.php has the

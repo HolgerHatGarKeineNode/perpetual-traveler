@@ -165,3 +165,22 @@ it('reports a 500 on a crawled page\'s Livewire roundtrip — positive control',
     expect($result['livewire'])->toBeGreaterThan(0)
         ->and(RouteCrawl::describe($result['roundtrip']))->toMatch('#\[http\] 500 \S*'.preg_quote($uri, '#').'#');
 });
+
+it('reports a GET document answered 500 or 404 — positive control for the navigation itself', function () {
+    new Configuration()->timeout(20_000);
+
+    // A page that renders fine and says nothing on any console channel: the
+    // status of the DOCUMENT is the only place this fault exists.
+    Route::get('/ptr-500', fn () => abort(500))->middleware('web');
+
+    $broken = RouteCrawl::probe('/ptr-500', 1280, 800);
+    expect(RouteCrawl::describe($broken['first']))->toMatch('#\[http\] document 500 http://\S+/ptr-500#');
+
+    // A path nothing serves: Folio's catch-all answers 404.
+    $missing = RouteCrawl::probe('/ptr-nope', 1280, 800);
+    expect(RouteCrawl::describe($missing['first']))->toMatch('#\[http\] document 404 http://\S+/ptr-nope#');
+
+    // And a healthy page next to them reports nothing, so the two matches above
+    // are the status and not an artefact of every probe.
+    expect(RouteCrawl::probe('/faq', 1280, 800)['first'])->toBe([]);
+});
